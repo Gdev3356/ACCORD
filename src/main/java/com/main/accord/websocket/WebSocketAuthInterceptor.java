@@ -28,10 +28,11 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             String token = accessor.getFirstNativeHeader("Authorization");
             if (token != null && token.startsWith("Bearer ")) {
                 try {
-                    Claims claims = jwtService.parseAccessToken(token.substring(7));
+                    Claims claims  = jwtService.parseAccessToken(token.substring(7));
                     AccordPrincipal principal = new AccordPrincipal(
                             UUID.fromString(claims.getSubject()),
-                            claims.get("email", String.class)
+                            claims.get("email", String.class),
+                            Boolean.TRUE.equals(claims.get("admin", Boolean.class))
                     );
                     accessor.setUser(new StompUser(principal));
                 } catch (JwtException e) {
