@@ -13,11 +13,9 @@ import java.net.URI;
 @Configuration
 public class StorageConfig {
 
-    // Supabase Storage endpoint: https://<project-ref>.supabase.co/storage/v1/s3
     @Value("${supabase.storage.endpoint}")
     private String storageEndpoint;
 
-    // From Supabase → Settings → API → service_role key acts as the secret
     @Value("${supabase.storage.access-key}")
     private String accessKey;
 
