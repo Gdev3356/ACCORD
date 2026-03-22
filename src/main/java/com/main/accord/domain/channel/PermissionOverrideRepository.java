@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface PermissionOverrideRepository extends JpaRepository<PermissionOverride, UUID> {
+public interface PermissionOverrideRepository extends JpaRepository<PermissionOverride, PermissionOverride.PermissionOverrideId> {
 
     @Query("SELECT p FROM PermissionOverride p WHERE p.idChannel = :channelId AND p.idRole IN :roleIds")
     List<PermissionOverride> findByChannelAndRoles(UUID channelId, List<UUID> roleIds);
