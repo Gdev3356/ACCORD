@@ -11,10 +11,14 @@ public interface ParticipantRepository extends JpaRepository<Participant, Partic
     List<Participant> findByIdConversationAndDtLeftIsNull(UUID conversationId);
 
     @Query("""
-        SELECT COUNT(p) > 0 FROM Participant p
+        SELECT COUNT(p) FROM DmParticipant p
         WHERE p.idConversation = :conversationId
           AND p.idUser = :userId
           AND p.dtLeft IS NULL
     """)
-    boolean isActiveParticipant(UUID conversationId, UUID userId);
+    long countActiveParticipant(UUID conversationId, UUID userId);
+
+    default boolean isActiveParticipant(UUID conversationId, UUID userId) {
+        return countActiveParticipant(conversationId, userId) > 0;
+    }
 }
