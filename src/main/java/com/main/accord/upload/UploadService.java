@@ -1,5 +1,6 @@
 package com.main.accord.upload;
 
+import com.main.accord.domain.account.VisualsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import java.util.UUID;
 public class UploadService {
 
     private final S3Client s3Client;
+    private final VisualsRepository visualsRepository;
 
     @Value("${supabase.storage.bucket}")
     private String bucket;
@@ -35,7 +37,14 @@ public class UploadService {
         byte[] resized = resizeImage(file, 256, 256);
         String key     = "pfp/" + userId + ".jpg";
         upload(key, resized, "image/jpeg");
-        return publicUrl + "/" + bucket + "/" + key;
+        String url = publicUrl + "/" + bucket + "/" + key;
+
+        visualsRepository.findById(userId).ifPresent(v -> {
+            v.setDsPfpUrl(url);
+            visualsRepository.save(v);
+        });
+
+        return url;
     }
 
     /**
