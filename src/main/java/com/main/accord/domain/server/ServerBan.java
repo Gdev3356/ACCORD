@@ -27,7 +27,7 @@ public class ServerBan {
     @Column(name = "DT_BANNED", updatable = false)
     private OffsetDateTime dtBanned;
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode
     public static class ServerBanId implements Serializable {
         private UUID idServer;
         private UUID idUser;
