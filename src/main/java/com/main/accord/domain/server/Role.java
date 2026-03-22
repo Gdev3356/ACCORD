@@ -24,15 +24,11 @@ public class Role {
     @Column(name = "NR_COLOR")
     private Integer nrColor;
 
-    @Column(name = "NR_PERMISSIONS")
-    private Long nrPermissions = 0L;
+    @Builder.Default @Column(name = "NR_PERMISSIONS")  private Long    nrPermissions = 0L;
 
-    @Column(name = "NR_POSITION")
-    private Short nrPosition = 0;
+    @Builder.Default @Column(name = "NR_POSITION")     private Short   nrPosition    = 0;
 
-    @Column(name = "ST_MENTIONABLE")
-    private Boolean stMentionable = false;
+    @Builder.Default @Column(name = "ST_MENTIONABLE")  private Boolean stMentionable = false;
 
-    @Column(name = "ST_HOISTED")
-    private Boolean stHoisted = false;
+    @Builder.Default @Column(name = "ST_HOISTED")      private Boolean stHoisted     = false;
 }

@@ -29,9 +29,9 @@ public class Message {
     @Column(name = "DS_CONTENT", columnDefinition = "TEXT")
     private String dsContent;
 
-    @Column(name = "ST_EDITED")  private Boolean stEdited  = false;
-    @Column(name = "ST_PINNED")  private Boolean stPinned  = false;
-    @Column(name = "ST_DELETED") private Boolean stDeleted = false;
+    @Builder.Default @Column(name = "ST_EDITED")  private Boolean stEdited  = false;
+    @Builder.Default @Column(name = "ST_PINNED")  private Boolean stPinned  = false;
+    @Builder.Default @Column(name = "ST_DELETED") private Boolean stDeleted = false;
 
     @CreationTimestamp
     @Column(name = "DT_CREATED", updatable = false)

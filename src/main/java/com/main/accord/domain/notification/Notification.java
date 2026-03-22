@@ -37,8 +37,7 @@ public class Notification {
     @Column(name = "JS_PAYLOAD", columnDefinition = "jsonb")
     private Map<String, Object> jsPayload;
 
-    @Column(name = "ST_READ")
-    private Boolean stRead = false;
+    @Builder.Default @Column(name = "ST_READ") private Boolean stRead = false;
 
     @CreationTimestamp
     @Column(name = "DT_CREATED", updatable = false)

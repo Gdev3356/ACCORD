@@ -32,8 +32,10 @@ public class Invite {
     @Column(name = "NR_MAX_USES")
     private Integer nrMaxUses;          // NULL = unlimited
 
-    @Column(name = "NR_USES")
-    private Integer nrUses = 0;
+    @Builder.Default @Column(name = "NR_USES")   private Integer nrUses   = 0;
+    @Builder.Default @Enumerated(EnumType.STRING)
+    @Column(name = "ST_STATUS", nullable = false)
+    private InviteStatus stStatus = InviteStatus.active;
 
     @CreationTimestamp
     @Column(name = "DT_CREATED", updatable = false)
@@ -41,8 +43,4 @@ public class Invite {
 
     @Column(name = "DT_EXPIRES")
     private OffsetDateTime dtExpires;   // NULL = never
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "ST_STATUS", nullable = false)
-    private InviteStatus stStatus = InviteStatus.active;
 }

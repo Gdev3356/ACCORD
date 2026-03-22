@@ -29,21 +29,17 @@ public class Channel {
     @Column(name = "DS_TOPIC", length = 1024)
     private String dsTopic;
 
-    @Enumerated(EnumType.STRING)
+    @Builder.Default @Enumerated(EnumType.STRING)
     @Column(name = "TP_CHANNEL", nullable = false)
     private ChannelType tpChannel = ChannelType.text;
 
-    @Column(name = "NR_POSITION")
-    private Short nrPosition = 0;
+    @Builder.Default @Column(name = "NR_POSITION")  private Short   nrPosition = 0;
 
-    @Column(name = "NR_SLOWMODE")
-    private Integer nrSlowmode = 0;
+    @Builder.Default @Column(name = "NR_SLOWMODE")  private Integer nrSlowmode = 0;
 
-    @Column(name = "ST_NSFW")
-    private Boolean stNsfw = false;
+    @Builder.Default @Column(name = "ST_NSFW")      private Boolean stNsfw     = false;
 
-    @Column(name = "ST_ARCHIVED")
-    private Boolean stArchived = false;
+    @Builder.Default @Column(name = "ST_ARCHIVED")  private Boolean stArchived = false;
 
     @CreationTimestamp
     @Column(name = "DT_CREATED", updatable = false)

@@ -23,9 +23,7 @@ public class PermissionOverride {
     @Column(name = "ID_USER")
     private UUID idUser;
 
-    @Column(name = "NR_ALLOW")
-    private Long nrAllow = 0L;
+    @Builder.Default @Column(name = "NR_ALLOW") private Long nrAllow = 0L;
 
-    @Column(name = "NR_DENY")
-    private Long nrDeny  = 0L;
+    @Builder.Default @Column(name = "NR_DENY")  private Long nrDeny  = 0L;
 }

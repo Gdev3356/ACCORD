@@ -32,14 +32,11 @@ public class Server {
     @Column(name = "DS_BANNER_URL")
     private String dsBannerUrl;
 
-    @Column(name = "NR_PERMISSIONS")
-    private Long nrPermissions = 0L;
+    @Builder.Default @Column(name = "NR_PERMISSIONS") private Long    nrPermissions = 0L;
 
-    @Column(name = "ST_PUBLIC")
-    private Boolean stPublic = false;
+    @Builder.Default @Column(name = "ST_PUBLIC")      private Boolean stPublic      = false;
 
-    @Column(name = "ST_VERIFIED")
-    private Boolean stVerified = false;
+    @Builder.Default @Column(name = "ST_VERIFIED")    private Boolean stVerified    = false;
 
     @CreationTimestamp
     @Column(name = "DT_CREATED", updatable = false)

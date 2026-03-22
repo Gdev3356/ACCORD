@@ -28,8 +28,7 @@ public class Visuals {
     @Column(name = "NR_BG_COLOR")
     private Integer nrBgColor;
 
-    @Column(name = "ST_MODE", length = 1)
-    private String stMode = "D";
+    @Builder.Default @Column(name = "ST_MODE", length = 1) private String stMode = "D";
 
     @Column(name = "ID_DECORATION")
     private UUID idDecoration;

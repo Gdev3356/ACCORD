@@ -33,8 +33,7 @@ public class BanLog {
     @Column(name = "DT_EXPIRES")
     private OffsetDateTime dtExpires;
 
-    @Column(name = "ST_LIFTED")
-    private Boolean stLifted = false;
+    @Builder.Default @Column(name = "ST_LIFTED") private Boolean stLifted = false;
 
     @Column(name = "DT_LIFTED_AT")
     private OffsetDateTime dtLiftedAt;

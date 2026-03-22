@@ -32,6 +32,5 @@ public class Account {
     @Column(name = "DT_LAST_LOGIN")
     private OffsetDateTime dtLastLogin;
 
-    @Column(name = "ST_ACTIVE", nullable = false)
-    private Boolean stActive = true;
+    @Builder.Default @Column(name = "ST_ACTIVE") private Boolean stActive = true;
 }

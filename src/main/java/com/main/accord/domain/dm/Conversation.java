@@ -22,8 +22,7 @@ public class Conversation {
     @Column(name = "DS_ICON_URL")
     private String dsIconUrl;
 
-    @Column(name = "ST_GROUP")
-    private Boolean stGroup = false;
+    @Builder.Default @Column(name = "ST_GROUP") private Boolean stGroup = false;
 
     @Column(name = "ID_OWNER")
     private UUID idOwner;

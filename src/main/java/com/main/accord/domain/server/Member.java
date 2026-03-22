@@ -24,8 +24,9 @@ public class Member {
     @Column(name = "DT_JOINED", updatable = false)
     private OffsetDateTime dtJoined;
 
-    @Column(name = "ST_MUTED")   private Boolean stMuted    = false;
-    @Column(name = "ST_DEAFENED") private Boolean stDeafened = false;
+    @Builder.Default @Column(name = "ST_MUTED")    private Boolean stMuted    = false;
+
+    @Builder.Default @Column(name = "ST_DEAFENED") private Boolean stDeafened = false;
 
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode
     public static class MemberId implements Serializable {
