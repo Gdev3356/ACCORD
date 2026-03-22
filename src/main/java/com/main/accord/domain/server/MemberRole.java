@@ -22,7 +22,7 @@ public class MemberRole {
     @Column(name = "DT_GRANTED", updatable = false)
     private OffsetDateTime dtGranted;
 
-    @Data @NoArgsConstructor @AllArgsConstructor
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode
     public static class MemberRoleId implements Serializable {
         private UUID idServer;
         private UUID idUser;

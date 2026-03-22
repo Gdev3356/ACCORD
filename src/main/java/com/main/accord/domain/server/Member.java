@@ -27,7 +27,7 @@ public class Member {
     @Column(name = "ST_MUTED")   private Boolean stMuted    = false;
     @Column(name = "ST_DEAFENED") private Boolean stDeafened = false;
 
-    @Data @NoArgsConstructor @AllArgsConstructor
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode
     public static class MemberId implements Serializable {
         private UUID idServer;
         private UUID idUser;

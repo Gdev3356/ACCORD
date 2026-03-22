@@ -24,7 +24,7 @@ public class Participant {
     @Column(name = "DT_LEFT")
     private OffsetDateTime dtLeft;   // NULL = still active
 
-    @Data @NoArgsConstructor @AllArgsConstructor
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode
     public static class ParticipantId implements Serializable {
         private UUID idConversation;
         private UUID idUser;

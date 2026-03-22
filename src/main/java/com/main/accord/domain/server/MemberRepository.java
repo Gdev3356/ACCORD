@@ -1,6 +1,7 @@
 package com.main.accord.domain.server;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
@@ -17,4 +18,8 @@ public interface MemberRepository extends JpaRepository<Member, Member.MemberId>
 
     @Query("SELECT s FROM Server s WHERE s.idServer = :serverId")
     Server findServer(UUID serverId);
+
+    @Modifying
+    @Query("DELETE FROM Member m WHERE m.idServer = :serverId AND m.idUser = :userId")
+    void deleteByIdServerAndIdUser(UUID serverId, UUID userId);
 }
