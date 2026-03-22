@@ -1,6 +1,7 @@
 package com.main.accord.domain.notification;
 
-import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -33,7 +34,7 @@ public class Notification {
     @Column(name = "DS_BODY", columnDefinition = "TEXT")
     private String dsBody;
 
-    @Type(JsonBinaryType.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "JS_PAYLOAD", columnDefinition = "jsonb")
     private Map<String, Object> jsPayload;
 
