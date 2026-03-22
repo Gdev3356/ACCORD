@@ -157,7 +157,7 @@ public class AuthService {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private AuthResponse issueTokens(Auth auth, Account account) {
-        String accessToken  = jwtService.generateAccessToken(auth.getIdUser(), auth.getDsEmail());
+        String accessToken = jwtService.generateAccessToken(auth.getIdUser(), auth.getDsEmail(), auth.getStAdmin());
         var    refreshToken = jwtService.generateRefreshToken(auth.getIdUser());
 
         return new AuthResponse(

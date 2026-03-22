@@ -31,10 +31,11 @@ public class JwtService {
 
     // ── Access token ──────────────────────────────────────────────────────────
 
-    public String generateAccessToken(UUID userId, String email) {
+    public String generateAccessToken(UUID userId, String email, boolean isAdmin) {
         return Jwts.builder()
                 .subject(userId.toString())
                 .claim("email", email)
+                .claim("admin", isAdmin)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_MS))
                 .signWith(key())

@@ -30,4 +30,8 @@ public class Auth {
     @Builder.Default
     @Column(name = "ST_ACTIVE")
     private Boolean stActive = true;
+
+    @Builder.Default
+    @Column(name = "ST_ADMIN")
+    private Boolean stAdmin = false;
 }

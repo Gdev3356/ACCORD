@@ -43,8 +43,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             Claims claims = jwtService.parseAccessToken(token);
             UUID   userId = UUID.fromString(claims.getSubject());
             String email  = claims.get("email", String.class);
+            boolean isAdmin = Boolean.TRUE.equals(claims.get("admin", Boolean.class));
 
-            AccordPrincipal principal = new AccordPrincipal(userId, email);
+            AccordPrincipal principal = new AccordPrincipal(userId, email, isAdmin);
             var auth = new UsernamePasswordAuthenticationToken(
                     principal, null, Collections.emptyList()
             );
