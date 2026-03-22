@@ -26,7 +26,7 @@ public class StorageConfig {
     public S3Client s3Client() {
         return S3Client.builder()
                 .endpointOverride(URI.create(storageEndpoint))
-                .region(Region.of("auto"))
+                .region(Region.of("us-west-2"))
                 .credentialsProvider(
                         StaticCredentialsProvider.create(
                                 AwsBasicCredentials.create(accessKey, secretKey)
