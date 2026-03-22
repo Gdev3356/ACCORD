@@ -15,6 +15,7 @@ import java.util.UUID;
 public class AccountController {
 
     private final AccountService accountService;
+    private final VisualsService visualsService;
 
     // GET /api/v1/users/@me — own profile
     @GetMapping("/@me")
@@ -41,6 +42,14 @@ public class AccountController {
             @AuthenticationPrincipal AccordPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
                 accountService.updateProfile(principal.userId(), req)
+        ));
+    }
+
+    @GetMapping("/@me/visuals")
+    public ResponseEntity<ApiResponse<Visuals>> getMyVisuals(
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                visualsService.getVisuals(principal.userId())
         ));
     }
 
