@@ -24,9 +24,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    @Value("${supabase.jwt.secret}")
-    private String jwtSecret;
-
     @Value("${accord.frontend.url}")
     private String frontendUrl;
 
@@ -49,13 +46,6 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
-    }
-
-    @Bean
-    public JwtDecoder jwtDecoder() {
-        // Supabase signs JWTs with HS256 using the JWT secret from project settings
-        SecretKeySpec key = new SecretKeySpec(jwtSecret.getBytes(), "HmacSHA256");
-        return NimbusJwtDecoder.withSecretKey(key).build();
     }
 
     @Bean
