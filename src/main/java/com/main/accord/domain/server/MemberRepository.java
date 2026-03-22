@@ -19,6 +19,13 @@ public interface MemberRepository extends JpaRepository<Member, Member.MemberId>
     @Query("SELECT s FROM Server s WHERE s.idServer = :serverId")
     Server findServer(UUID serverId);
 
+    @Query("""
+        SELECT COALESCE(MAX(r.nrPosition), -1) FROM Role r
+        JOIN MemberRole mr ON mr.idRole = r.idRole
+        WHERE mr.idUser = :userId AND mr.idServer = :serverId
+    """)
+    short getHighestRolePosition(UUID userId, UUID serverId);
+
     @Modifying
     @Query("DELETE FROM Member m WHERE m.idServer = :serverId AND m.idUser = :userId")
     void deleteByIdServerAndIdUser(UUID serverId, UUID userId);

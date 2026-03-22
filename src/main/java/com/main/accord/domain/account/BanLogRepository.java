@@ -9,6 +9,14 @@ import java.util.UUID;
 public interface BanLogRepository extends JpaRepository<BanLog, UUID> {
 
     @Query("""
+        SELECT COUNT(b) > 0 FROM BanLog b
+        WHERE b.idUser   = :userId
+          AND b.stLifted = false
+          AND (b.dtExpires IS NULL OR b.dtExpires > CURRENT_TIMESTAMP)
+    """)
+    boolean isCurrentlyBanned(UUID userId);
+
+    @Query("""
         SELECT b FROM BanLog b WHERE b.idUser = :userId
         ORDER BY b.dtBanned DESC
     """)
