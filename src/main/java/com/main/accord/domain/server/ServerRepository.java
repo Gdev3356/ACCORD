@@ -11,7 +11,7 @@ public interface ServerRepository extends JpaRepository<Server, UUID> {
     // All servers a user is a member of
     @Query("""
         SELECT s FROM Server s
-        JOIN SV_MEMBER m ON m.idServer = s.idServer
+        JOIN Member m ON m.idServer = s.idServer
         WHERE m.idUser = :userId
         ORDER BY s.dtCreated ASC
     """)
