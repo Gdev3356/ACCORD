@@ -2,31 +2,26 @@ package com.main.accord.domain.account;
 
 import com.main.accord.common.AccordException;
 import com.main.accord.common.NotFoundException;
-import com.main.accord.security.EmailService;
 import com.main.accord.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.time.OffsetDateTime;
-import java.util.Base64;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
-    private final AuthRepository              authRepository;
-    private final AccountRepository           accountRepository;
-    private final VisualsRepository           visualsRepository;
-    private final PlatformInviteRepository    platformInviteRepository;
-    private final RefreshTokenRepository      refreshTokenRepository;
-    private final EmailVerifyTokenRepository  emailVerifyTokenRepository;
-    private final PasswordEncoder             passwordEncoder;
-    private final JwtService                  jwtService;
-    private final EmailService                emailService;
+    private final AuthRepository           authRepository;
+    private final AccountRepository        accountRepository;
+    private final VisualsRepository        visualsRepository;
+    private final PlatformInviteRepository platformInviteRepository;
+    private final RefreshTokenRepository   refreshTokenRepository;
+    private final PasswordEncoder          passwordEncoder;
+    private final JwtService               jwtService;
 
     public record RegisterRequest(
             String email,
@@ -54,7 +49,7 @@ public class AuthService {
     // ── Register ──────────────────────────────────────────────────────────────
 
     @Transactional
-    public String register(RegisterRequest req) {
+    public AuthResponse register(RegisterRequest req) {
         // 1. Validate invite code
         PlatformInvite invite = platformInviteRepository.findByDsCode(req.inviteCode())
                 .orElseThrow(() -> new AccordException("Invalid invite code."));
@@ -74,12 +69,12 @@ public class AuthService {
             throw new AccordException("This handle is already taken.");
         }
 
-        // 3. Create AC_AUTH — inactive until email confirmed
+        // 3. Create AC_AUTH — active immediately (invite code is the verification)
         Auth auth = authRepository.save(
                 Auth.builder()
                         .dsEmail(req.email().toLowerCase())
                         .dsPassword(passwordEncoder.encode(req.password()))
-                        .stActive(false)   // ← inactive until verified
+                        .stActive(true)
                         .build()
         );
 
@@ -103,49 +98,7 @@ public class AuthService {
         invite.setDtUsed(OffsetDateTime.now());
         platformInviteRepository.save(invite);
 
-        // 7. Generate verify token and send email
-        String token = generateSecureToken();
-        emailVerifyTokenRepository.save(
-                EmailVerifyToken.builder()
-                        .idUser(auth.getIdUser())
-                        .dsToken(token)
-                        .dtExpires(OffsetDateTime.now().plusHours(24))
-                        .build()
-        );
-        emailService.sendVerificationEmail(auth.getDsEmail(), token);
-
-        // Return message — no tokens yet, account not active
-        return "Account created. Check your email to confirm your address.";
-    }
-
-    // ── Verify email ──────────────────────────────────────────────────────────
-
-    @Transactional
-    public AuthResponse verify(String token) {
-        EmailVerifyToken verifyToken = emailVerifyTokenRepository.findByDsToken(token)
-                .orElseThrow(() -> new AccordException("Invalid verification link."));
-
-        if (verifyToken.getStUsed()) {
-            throw new AccordException("This link has already been used.");
-        }
-        if (verifyToken.getDtExpires().isBefore(OffsetDateTime.now())) {
-            throw new AccordException("This link has expired. Please register again.");
-        }
-
-        // Activate the account
-        Auth auth = authRepository.findById(verifyToken.getIdUser())
-                .orElseThrow(() -> new NotFoundException("Account not found."));
-        auth.setStActive(true);
-        authRepository.save(auth);
-
-        // Mark token used
-        verifyToken.setStUsed(true);
-        emailVerifyTokenRepository.save(verifyToken);
-
-        // Issue tokens — user is now logged in automatically after verifying
-        Account account = accountRepository.findById(auth.getIdUser())
-                .orElseThrow(() -> new NotFoundException("Account not found."));
-
+        // 7. Issue tokens immediately — no email step
         return issueTokens(auth, account);
     }
 
@@ -157,7 +110,7 @@ public class AuthService {
                 .orElseThrow(() -> new AccordException("Invalid email or password."));
 
         if (!auth.getStActive()) {
-            throw new AccordException("Please confirm your email before signing in.");
+            throw new AccordException("This account has been deactivated.");
         }
         if (!passwordEncoder.matches(req.password(), auth.getDsPassword())) {
             throw new AccordException("Invalid email or password.");
@@ -172,7 +125,7 @@ public class AuthService {
         return issueTokens(auth, account);
     }
 
-    // ── Refresh, signOut — unchanged from before ──────────────────────────────
+    // ── Refresh ───────────────────────────────────────────────────────────────
 
     @Transactional
     public AuthResponse refresh(String refreshTokenValue) {
@@ -191,6 +144,8 @@ public class AuthService {
 
         return issueTokens(auth, account);
     }
+
+    // ── Sign out ──────────────────────────────────────────────────────────────
 
     @Transactional
     public void signOut(UUID userId) {
@@ -213,11 +168,5 @@ public class AuthService {
                         auth.getStAdmin()
                 )
         );
-    }
-
-    private String generateSecureToken() {
-        byte[] bytes = new byte[48];
-        new SecureRandom().nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }

@@ -15,7 +15,7 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<String>> register(
+    public ResponseEntity<ApiResponse<AuthService.AuthResponse>> register(
             @RequestBody AuthService.RegisterRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(authService.register(req)));
     }
@@ -24,13 +24,6 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthService.AuthResponse>> login(
             @RequestBody AuthService.LoginRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(authService.login(req)));
-    }
-
-    // GET so the link in the email works directly in the browser
-    @GetMapping("/verify")
-    public ResponseEntity<ApiResponse<AuthService.AuthResponse>> verify(
-            @RequestParam String token) {
-        return ResponseEntity.ok(ApiResponse.ok(authService.verify(token)));
     }
 
     @PostMapping("/refresh")
