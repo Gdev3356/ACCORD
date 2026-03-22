@@ -39,5 +39,13 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
+    @PostMapping("/change-password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @RequestBody AuthService.ChangePasswordRequest req,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        authService.changePassword(principal.userId(), req);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
     public record RefreshRequest(String refreshToken) {}
 }

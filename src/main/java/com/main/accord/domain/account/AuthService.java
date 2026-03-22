@@ -152,6 +152,27 @@ public class AuthService {
         jwtService.revokeAllTokens(userId);
     }
 
+    // ── Change Password ────────────────────────────────────────────────────────
+    public record ChangePasswordRequest(String currentPassword, String newPassword) {}
+
+    @Transactional
+    public void changePassword(UUID userId, ChangePasswordRequest req) {
+        Auth auth = authRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found."));
+
+        if (!passwordEncoder.matches(req.currentPassword(), auth.getDsPassword())) {
+            throw new AccordException("Current password is incorrect.");
+        }
+        if (req.newPassword().length() < 8) {
+            throw new AccordException("Password must be at least 8 characters.");
+        }
+
+        auth.setDsPassword(passwordEncoder.encode(req.newPassword()));
+        authRepository.save(auth);
+
+        // Revoke all existing sessions — force re-login on other devices
+        jwtService.revokeAllTokens(userId);
+    }
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private AuthResponse issueTokens(Auth auth, Account account) {
