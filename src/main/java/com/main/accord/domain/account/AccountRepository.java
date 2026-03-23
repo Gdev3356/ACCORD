@@ -21,12 +21,15 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     boolean isCurrentlyBanned(UUID userId);
 
     @Query("""
-        SELECT a.idUser AS idUser, a.dsDisplayName AS dsDisplayName,
-               a.dsHandle AS dsHandle, a.dsPfpUrl AS dsPfpUrl
+        SELECT a.idUser         AS idUser,
+               a.dsDisplayName  AS dsDisplayName,
+               a.dsHandle       AS dsHandle,
+               v.dsPfpUrl       AS dsPfpUrl
         FROM Account a
+        LEFT JOIN AccountVisuals v ON v.idUser = a.idUser
         WHERE a.idUser = :id
     """)
-    Optional<AccountSummary> findSummaryById(UUID id);
+        Optional<AccountSummary> findSummaryById(UUID id);
 
     interface AccountSummary {
         UUID getIdUser();

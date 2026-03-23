@@ -5,15 +5,20 @@ import com.main.accord.common.ApiResponse;
 import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.domain.server.ServerRepository;
 import com.main.accord.security.AccordPrincipal;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
+@RestController
+@RequestMapping("/api/v1/users")
+@RequiredArgsConstructor
 public class UserProfileController {
 
     FriendshipService friendshipService;
