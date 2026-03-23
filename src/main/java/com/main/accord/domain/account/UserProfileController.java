@@ -21,10 +21,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserProfileController {
 
-    FriendshipService friendshipService;
-    AccountRepository accountRepository;
-    MemberRepository memberRepository;
-    ServerRepository serverRepository;
+    private final FriendshipService friendshipService;
+    private final AccountRepository accountRepository;
+    private final MemberRepository  memberRepository;
+    private final ServerRepository  serverRepository;
 
     @GetMapping("/{userId}/mutual-friends")
     public ResponseEntity<ApiResponse<MutualFriendsResponse>> getMutualFriends(
