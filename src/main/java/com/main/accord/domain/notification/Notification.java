@@ -25,6 +25,7 @@ public class Notification {
     private UUID idUser;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "TP_NOTIF", nullable = false, columnDefinition = "notif_type")
     private NotifType tpNotif;
 

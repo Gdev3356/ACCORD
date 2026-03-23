@@ -65,13 +65,13 @@ public class NotificationService {
         });
     }
 
-    @Transactional   // ← was missing
+    @Transactional
     public void markAllRead(UUID userId) {
         List<Notification> unread = notificationRepository.findUnreadByUser(userId);
         unread.forEach(n -> {
             n.setStRead(true);
             n.setDtRead(OffsetDateTime.now());
         });
-        notificationRepository.saveAll(unread);  // ← was missing
+        notificationRepository.saveAll(unread);
     }
 }
