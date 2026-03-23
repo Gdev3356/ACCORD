@@ -39,6 +39,8 @@ public class AccountService {
             account.setDsHandle(handle);
         }
 
+        if (req.displayName() != null) account.setDsDisplayName(req.displayName());
+        if (req.pronouns()    != null) account.setDsPronouns(req.pronouns());
         if (req.presence()             != null) account.setStPresence(req.presence());
         if (req.notificationsEnabled() != null) account.setStNotificationsEnabled(req.notificationsEnabled());
 

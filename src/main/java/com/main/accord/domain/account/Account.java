@@ -38,7 +38,7 @@ public class Account {
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(name = "ST_PRESENCE", columnDefinition = "presence_status")
+    @Column(name = "ST_PRESENCE", columnDefinition = "presence_status DEFAULT 'online'")
     private PresenceStatus stPresence = PresenceStatus.online;
 
     @Builder.Default
