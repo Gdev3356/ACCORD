@@ -3,6 +3,9 @@ package com.main.accord.domain.dm;
 import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.notification.NotifType;
+import com.main.accord.domain.notification.Notification;
+import com.main.accord.domain.notification.NotificationRepository;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,14 +21,14 @@ public class FriendshipService {
 
     private final FriendshipRepository friendshipRepository;
     private final ChatHandler          chatHandler;
-
+    private final NotificationRepository notificationRepository;
+    
     // ── Send a friend request ─────────────────────────────────────────────────
 
     @Transactional
     public Friendship sendRequest(UUID requesterId, UUID targetId) {
-        if (requesterId.equals(targetId)) {
+        if (requesterId.equals(targetId))
             throw new AccordException("You can't send a friend request to yourself.");
-        }
 
         friendshipRepository.findBetween(requesterId, targetId).ifPresent(f -> {
             switch (f.getStStatus()) {
@@ -35,10 +38,22 @@ public class FriendshipService {
             }
         });
 
-        Friendship friendship = Friendship.create(requesterId, targetId, requesterId);
-        Friendship saved = friendshipRepository.save(friendship);
+        Friendship saved = friendshipRepository.save(
+                Friendship.create(requesterId, targetId, requesterId)
+        );
 
-        // Notify the target user in real time
+        // Persist notification so it survives missed WS events
+        Notification notif = notificationRepository.save(
+                Notification.builder()
+                        .idUser(targetId)
+                        .tpNotif(NotifType.friend_request)
+                        .dsTitle("Friend Request")
+                        .dsBody("Someone sent you a friend request")
+                        .jsPayload(Map.of("from", requesterId.toString()))
+                        .build()
+        );
+
+        // Also push real-time
         chatHandler.sendToUser(targetId, Map.of(
                 "type", "FRIEND_REQUEST",
                 "data", Map.of("from", requesterId)

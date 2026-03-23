@@ -3,10 +3,13 @@ package com.main.accord.domain.notification;
 import com.main.accord.domain.message.Message;
 import com.main.accord.domain.message.MentionParser;
 import com.main.accord.websocket.ChatHandler;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -62,10 +65,13 @@ public class NotificationService {
         });
     }
 
+    @Transactional   // ← was missing
     public void markAllRead(UUID userId) {
-        notificationRepository.findUnreadByUser(userId).forEach(n -> {
+        List<Notification> unread = notificationRepository.findUnreadByUser(userId);
+        unread.forEach(n -> {
             n.setStRead(true);
-            n.setDtRead(java.time.OffsetDateTime.now());
+            n.setDtRead(OffsetDateTime.now());
         });
+        notificationRepository.saveAll(unread);  // ← was missing
     }
 }
