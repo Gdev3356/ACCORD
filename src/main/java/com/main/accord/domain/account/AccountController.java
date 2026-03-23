@@ -74,7 +74,7 @@ public class AccountController {
     public record PresenceRequest(PresenceStatus presence) {}
 
     @GetMapping("/by-id/{userId}")
-    public ResponseEntity<ApiResponse<Account>> getById(
+    public ResponseEntity<ApiResponse<Account>> getByUserId(
             @PathVariable UUID userId) {
         return ResponseEntity.ok(ApiResponse.ok(
                 accountService.getById(userId)
