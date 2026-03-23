@@ -79,6 +79,15 @@ public class DmController {
         ));
     }
 
+    // POST /api/v1/dm/{conversationId}/typing
+    @PostMapping("/{conversationId}/typing")
+    public ResponseEntity<ApiResponse<Void>> sendTyping(
+            @PathVariable UUID conversationId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        dmService.broadcastTyping(conversationId, principal.userId());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
     public record SendMessageRequest(String content) {}
     public record CreateGroupRequest(List<UUID> userIds, String name) {}
 }

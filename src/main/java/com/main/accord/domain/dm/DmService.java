@@ -105,4 +105,10 @@ public class DmService {
             throw new ForbiddenException("You are not part of this conversation.");
         }
     }
+
+    public void broadcastTyping(UUID conversationId, UUID userId) {
+        assertParticipant(conversationId, userId);
+        chatHandler.broadcastToDm(conversationId,
+                Map.of("type", "DM_TYPING", "data", Map.of("userId", userId.toString())));
+    }
 }
