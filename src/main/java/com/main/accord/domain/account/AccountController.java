@@ -71,15 +71,5 @@ public class AccountController {
         ));
     }
 
-    // PATCH /api/v1/users/@me/visuals
-    @PatchMapping("/@me/visuals")
-    public ResponseEntity<ApiResponse<Visuals>> updateMyVisuals(
-            @RequestBody VisualsService.UpdateVisualsRequest req,
-            @AuthenticationPrincipal AccordPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.ok(
-                visualsService.updateVisuals(principal.userId(), req)
-        ));
-    }
-
     public record PresenceRequest(PresenceStatus presence) {}
 }
