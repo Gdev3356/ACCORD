@@ -72,4 +72,12 @@ public class AccountController {
     }
 
     public record PresenceRequest(PresenceStatus presence) {}
+
+    @GetMapping("/by-id/{userId}")
+    public ResponseEntity<ApiResponse<Account>> getById(
+            @PathVariable UUID userId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                accountService.getById(userId)
+        ));
+    }
 }
