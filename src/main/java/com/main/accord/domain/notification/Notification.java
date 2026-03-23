@@ -25,7 +25,7 @@ public class Notification {
     private UUID idUser;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "TP_NOTIF", nullable = false)
+    @Column(name = "TP_NOTIF", nullable = false, columnDefinition = "notif_type")
     private NotifType tpNotif;
 
     @Column(name = "DS_TITLE", length = 150)

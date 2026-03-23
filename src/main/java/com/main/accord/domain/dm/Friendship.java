@@ -17,8 +17,9 @@ public class Friendship {
     @Id @Column(name = "ID_USER_A") private UUID idUserA;
     @Id @Column(name = "ID_USER_B") private UUID idUserB;
 
-    @Builder.Default @Enumerated(EnumType.STRING)
-    @Column(name = "ST_STATUS", nullable = false)
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ST_STATUS", nullable = false, columnDefinition = "friend_status")
     private FriendStatus stStatus = FriendStatus.pending;
 
     @Column(name = "ID_REQUESTER", nullable = false)
