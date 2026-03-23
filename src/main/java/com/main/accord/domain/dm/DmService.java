@@ -22,10 +22,12 @@ public class DmService {
     private final FriendshipRepository    friendshipRepository;
     private final ChatHandler             chatHandler;
 
-    /** Open or retrieve a 1-on-1 DM with another user. */
+    public List<Conversation> getConversations(UUID userId) {
+        return conversationRepository.findAllByParticipant(userId);
+    }
+
     @Transactional
     public Conversation openDm(UUID requesterId, UUID targetId) {
-        // TODO: check friendship status (optional — you may allow DMs without being friends)
         return conversationRepository
                 .findDirectBetween(requesterId, targetId)
                 .orElseGet(() -> {
@@ -33,14 +35,44 @@ public class DmService {
                             Conversation.builder().stGroup(false).build()
                     );
                     participantRepository.saveAll(List.of(
-                            Participant.builder().idConversation(convo.getIdConversation()).idUser(requesterId).build(),
-                            Participant.builder().idConversation(convo.getIdConversation()).idUser(targetId).build()
+                            Participant.builder()
+                                    .idConversation(convo.getIdConversation())
+                                    .idUser(requesterId).build(),
+                            Participant.builder()
+                                    .idConversation(convo.getIdConversation())
+                                    .idUser(targetId).build()
                     ));
                     return convo;
                 });
     }
 
-    public List<DmMessage> getMessages(UUID conversationId, UUID requesterId, UUID beforeId, int limit) {
+    @Transactional
+    public Conversation createGroup(UUID creatorId, List<UUID> userIds, String name) {
+        Conversation convo = conversationRepository.save(
+                Conversation.builder()
+                        .stGroup(true)
+                        .idOwner(creatorId)
+                        .dsName(name)
+                        .build()
+        );
+        // Add creator + all invited users
+        List<Participant> participants = new java.util.ArrayList<>();
+        participants.add(Participant.builder()
+                .idConversation(convo.getIdConversation())
+                .idUser(creatorId).build());
+        for (UUID uid : userIds) {
+            if (!uid.equals(creatorId)) {
+                participants.add(Participant.builder()
+                        .idConversation(convo.getIdConversation())
+                        .idUser(uid).build());
+            }
+        }
+        participantRepository.saveAll(participants);
+        return convo;
+    }
+
+    public List<DmMessage> getMessages(UUID conversationId, UUID requesterId,
+                                       UUID beforeId, int limit) {
         assertParticipant(conversationId, requesterId);
         PageRequest page = PageRequest.of(0, Math.min(limit, 100));
         return beforeId != null
@@ -59,8 +91,13 @@ public class DmService {
                         .build()
         );
         chatHandler.broadcastToDm(conversationId,
-                Map.of("type", "MESSAGE_CREATE", "data", saved));
+                Map.of("type", "DM_MESSAGE_CREATE", "data", saved));
         return saved;
+    }
+
+    public List<Participant> getParticipants(UUID conversationId, UUID requesterId) {
+        assertParticipant(conversationId, requesterId);
+        return participantRepository.findByIdConversationAndDtLeftIsNull(conversationId);
     }
 
     private void assertParticipant(UUID conversationId, UUID userId) {
