@@ -38,7 +38,8 @@ public class Account {
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(name = "ST_PRESENCE", columnDefinition = "presence_status DEFAULT 'online'")
+    @Column(name = "ST_PRESENCE")
+    @org.hibernate.annotations.ColumnTransformer(write = "?::presence_status")
     private PresenceStatus stPresence = PresenceStatus.online;
 
     @Builder.Default
