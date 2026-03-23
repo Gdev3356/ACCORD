@@ -39,8 +39,8 @@ public class AccountService {
             account.setDsHandle(handle);
         }
 
-        if (req.displayName() != null) account.setDsDisplayName(req.displayName());
-        if (req.pronouns()    != null) account.setDsPronouns(req.pronouns());
+        if (req.presence()             != null) account.setStPresence(req.presence());
+        if (req.notificationsEnabled() != null) account.setStNotificationsEnabled(req.notificationsEnabled());
 
         return accountRepository.save(account);
     }
@@ -61,9 +61,28 @@ public class AccountService {
         accountRepository.save(account);
     }
 
+
+    @Transactional
+    public Account updatePresence(UUID userId, PresenceStatus presence) {
+        Account account = accountRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found."));
+        account.setStPresence(presence);
+        return accountRepository.save(account);
+    }
+
+    @Transactional
+    public Account updateNotifications(UUID userId, boolean enabled) {
+        Account account = accountRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found."));
+        account.setStNotificationsEnabled(enabled);
+        return accountRepository.save(account);
+    }
+
     public record UpdateProfileRequest(
-            String handle,
-            String displayName,
-            String pronouns
+            String         handle,
+            String         displayName,
+            String         pronouns,
+            PresenceStatus presence,
+            Boolean        notificationsEnabled
     ) {}
 }

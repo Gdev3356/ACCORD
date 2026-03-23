@@ -39,7 +39,7 @@ public class VisualsService {
             String  bannerUrl,
             String  bio,
             Integer bgColor,
-            String  mode,       // "D" or "L"
+            String  mode,
             UUID    decoration,
             UUID    effect
     ) {}

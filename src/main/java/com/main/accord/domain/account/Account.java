@@ -32,5 +32,16 @@ public class Account {
     @Column(name = "DT_LAST_LOGIN")
     private OffsetDateTime dtLastLogin;
 
-    @Builder.Default @Column(name = "ST_ACTIVE") private Boolean stActive = true;
+    @Builder.Default
+    @Column(name = "ST_ACTIVE")
+    private Boolean stActive = true;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ST_PRESENCE", columnDefinition = "presence_status")
+    private PresenceStatus stPresence = PresenceStatus.online;
+
+    @Builder.Default
+    @Column(name = "ST_NOTIFICATIONS_ENABLED")
+    private Boolean stNotificationsEnabled = true;
 }

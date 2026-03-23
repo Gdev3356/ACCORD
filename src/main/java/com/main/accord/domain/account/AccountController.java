@@ -60,4 +60,26 @@ public class AccountController {
         accountService.softDelete(principal.userId());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
+
+    // PATCH /api/v1/users/@me/presence
+    @PatchMapping("/@me/presence")
+    public ResponseEntity<ApiResponse<Account>> updatePresence(
+            @RequestBody PresenceRequest req,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                accountService.updatePresence(principal.userId(), req.presence())
+        ));
+    }
+
+    // PATCH /api/v1/users/@me/visuals
+    @PatchMapping("/@me/visuals")
+    public ResponseEntity<ApiResponse<Visuals>> updateMyVisuals(
+            @RequestBody VisualsService.UpdateVisualsRequest req,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                visualsService.updateVisuals(principal.userId(), req)
+        ));
+    }
+
+    public record PresenceRequest(PresenceStatus presence) {}
 }
