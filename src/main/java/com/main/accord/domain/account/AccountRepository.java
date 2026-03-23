@@ -26,7 +26,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
                a.dsHandle       AS dsHandle,
                v.dsPfpUrl       AS dsPfpUrl
         FROM Account a
-        LEFT JOIN AccountVisuals v ON v.idUser = a.idUser
+        LEFT JOIN AC_VISUALS v ON v.idUser = a.idUser
         WHERE a.idUser = :id
     """)
         Optional<AccountSummary> findSummaryById(UUID id);
