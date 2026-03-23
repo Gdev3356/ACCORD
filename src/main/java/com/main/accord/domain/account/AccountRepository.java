@@ -19,4 +19,19 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
           AND (b.dtExpires IS NULL OR b.dtExpires > CURRENT_TIMESTAMP)
     """)
     boolean isCurrentlyBanned(UUID userId);
+
+    @Query("""
+        SELECT a.idUser AS idUser, a.dsDisplayName AS dsDisplayName,
+               a.dsHandle AS dsHandle, a.dsPfpUrl AS dsPfpUrl
+        FROM Account a
+        WHERE a.idUser = :id
+    """)
+    Optional<AccountSummary> findSummaryById(UUID id);
+
+    interface AccountSummary {
+        UUID getIdUser();
+        String getDsDisplayName();
+        String getDsHandle();
+        String getDsPfpUrl();
+    }
 }

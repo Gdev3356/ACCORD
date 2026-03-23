@@ -28,4 +28,13 @@ public interface DmMessageRepository extends JpaRepository<DmMessage, UUID> {
         ORDER BY m.dtCreated DESC
     """)
     List<DmMessage> findBeforeMessage(UUID conversationId, UUID beforeId, Pageable pageable);
+
+        @Query("""
+        SELECT m FROM DmMessage m
+        WHERE m.idConversation = :conversationId
+          AND m.stDeleted = false
+          AND LOWER(m.dsContent) LIKE CONCAT('%', :query, '%')
+        ORDER BY m.dtCreated DESC
+    """)
+    List<DmMessage> searchContent(UUID conversationId, String query, Pageable pageable);
 }

@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ServerRepository extends JpaRepository<Server, UUID> {
@@ -21,4 +22,18 @@ public interface ServerRepository extends JpaRepository<Server, UUID> {
     List<Server> findByStPublicTrueOrderByDsNameAsc();
 
     boolean existsByIdOwner(UUID ownerId);
+
+    @Query("""
+        SELECT s.idServer AS idServer, s.dsName AS dsName, s.dsIconUrl AS dsIconUrl
+        FROM Server s
+        WHERE s.idServer = :id
+    """)
+    Optional<ServerSummary> findSummaryById(UUID id);
+
+    // projection interface (can be a nested interface or a top-level one)
+    interface ServerSummary {
+        UUID getIdServer();
+        String getDsName();
+        String getDsIconUrl();
+    }
 }

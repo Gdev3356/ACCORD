@@ -26,6 +26,9 @@ public interface MemberRepository extends JpaRepository<Member, Member.MemberId>
     """)
     short getHighestRolePosition(UUID userId, UUID serverId);
 
+    @Query("SELECT m.idServer FROM Member m WHERE m.idUser = :userId")
+    List<UUID> findServerIdsByUser(UUID userId);
+
     @Modifying
     @Query("DELETE FROM Member m WHERE m.idServer = :serverId AND m.idUser = :userId")
     void deleteByIdServerAndIdUser(UUID serverId, UUID userId);

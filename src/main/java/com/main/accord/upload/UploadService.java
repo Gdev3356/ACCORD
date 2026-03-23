@@ -2,6 +2,8 @@ package com.main.accord.upload;
 
 import com.main.accord.common.AccordException;
 import com.main.accord.domain.account.VisualsRepository;
+import com.main.accord.domain.server.SvEmoji;
+import com.main.accord.domain.server.SvEmojiRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -126,5 +128,59 @@ public class UploadService {
     private String getExtension(String filename) {
         if (filename == null || !filename.contains(".")) return "";
         return filename.substring(filename.lastIndexOf('.'));
+    }
+
+    private final SvEmojiRepository emojiRepository;  // add to constructor injection
+
+    private static final long MAX_EMOJI_SIZE = 256 * 1024L; // 256KB — same as Discord
+
+    private static final Set<String> ALLOWED_EMOJI_TYPES = Set.of(
+            "image/png", "image/gif", "image/webp"
+    );
+
+    public String uploadEmoji(UUID serverId, UUID creatorId,
+                              String name, MultipartFile file) throws IOException {
+        if (file.isEmpty())
+            throw new AccordException("File is empty.");
+        if (file.getSize() > MAX_EMOJI_SIZE)
+            throw new AccordException("Emoji must be under 256KB.");
+
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_EMOJI_TYPES.contains(contentType.toLowerCase()))
+            throw new AccordException("Emoji must be PNG, GIF, or WebP.");
+
+        // Validate name — alphanumeric + underscores only, like Discord
+        if (!name.matches("[a-zA-Z0-9_]{2,50}"))
+            throw new AccordException("Emoji name must be 2–50 alphanumeric characters or underscores.");
+
+        if (emojiRepository.existsByIdServerAndDsName(serverId, name))
+            throw new AccordException("An emoji with that name already exists in this server.");
+
+        boolean animated = "image/gif".equals(contentType.toLowerCase());
+
+        // For non-GIF images, resize to 128×128 like Discord
+        byte[] bytes = animated ? file.getBytes() : resizeImage(file, 128, 128);
+        String ext   = animated ? ".gif" : ".png";
+        String key   = "emojis/" + serverId + "/" + name + ext;
+
+        upload(key, bytes, animated ? "image/gif" : "image/png");
+        String url = publicUrl + "/" + bucket + "/" + key;
+
+        emojiRepository.save(SvEmoji.builder()
+                .idServer(serverId)
+                .idCreator(creatorId)
+                .dsName(name)
+                .dsUrl(url)
+                .stAnimated(animated)
+                .build());
+
+        return url;
+    }
+
+    public void deleteEmoji(UUID emojiId) {
+        emojiRepository.findById(emojiId).ifPresent(emoji -> {
+            // Optionally delete from S3 here too
+            emojiRepository.delete(emoji);
+        });
     }
 }

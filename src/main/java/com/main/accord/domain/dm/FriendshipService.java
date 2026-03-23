@@ -136,6 +136,12 @@ public class FriendshipService {
         friendshipRepository.delete(f);
     }
 
+    public List<UUID> getFriendIds(UUID userId) {
+        return friendshipRepository.findAcceptedByUser(userId)
+                .stream()
+                .map(f -> f.getIdUserA().equals(userId) ? f.getIdUserB() : f.getIdUserA())
+                .toList();
+    }
     // ── Queries ───────────────────────────────────────────────────────────────
 
     public List<Friendship> getFriends(UUID userId) {

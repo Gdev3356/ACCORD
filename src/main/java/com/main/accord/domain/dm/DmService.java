@@ -111,4 +111,12 @@ public class DmService {
         chatHandler.broadcastToDm(conversationId,
                 Map.of("type", "DM_TYPING", "data", Map.of("userId", userId.toString())));
     }
+
+    public List<DmMessage> searchMessages(UUID conversationId, UUID requesterId,
+                                          String query, int limit) {
+        assertParticipant(conversationId, requesterId);
+        return dmMessageRepository.searchContent(
+                conversationId, query.toLowerCase(), PageRequest.of(0, Math.min(limit, 100))
+        );
+    }
 }

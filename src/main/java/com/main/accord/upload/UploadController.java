@@ -37,4 +37,15 @@ public class UploadController {
         String url = uploadService.uploadAttachment(messageId, file);
         return ResponseEntity.ok(ApiResponse.ok(Map.of("url", url)));
     }
+
+    @PostMapping("/emoji/{serverId}")
+    public ResponseEntity<ApiResponse<Map<String, String>>> uploadEmoji(
+            @PathVariable UUID serverId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("name") String name,
+            @AuthenticationPrincipal AccordPrincipal principal) throws IOException {
+
+        String url = uploadService.uploadEmoji(serverId, principal.userId(), name, file);
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("url", url)));
+    }
 }

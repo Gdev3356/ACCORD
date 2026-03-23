@@ -90,4 +90,15 @@ public class DmController {
 
     public record SendMessageRequest(String content) {}
     public record CreateGroupRequest(List<UUID> userIds, String name) {}
+
+    @GetMapping("/{conversationId}/messages/search")
+    public ResponseEntity<ApiResponse<List<DmMessage>>> searchMessages(
+            @PathVariable UUID conversationId,
+            @RequestParam String q,
+            @RequestParam(defaultValue = "50") int limit,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                dmService.searchMessages(conversationId, principal.userId(), q, limit)
+        ));
+    }
 }
