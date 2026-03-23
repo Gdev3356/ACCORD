@@ -34,4 +34,12 @@ public class VisualsController {
                 visualsService.updateVisuals(principal.userId(), req)
         ));
     }
+
+    @GetMapping("/by-id/{userId}/visuals")
+    public ResponseEntity<ApiResponse<Visuals>> getVisualsByUserId(
+            @PathVariable UUID userId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                visualsService.getVisuals(userId)
+        ));
+    }
 }
