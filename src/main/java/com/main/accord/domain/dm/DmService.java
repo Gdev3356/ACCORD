@@ -2,6 +2,9 @@ package com.main.accord.domain.dm;
 
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.account.AccountRepository;
+import com.main.accord.domain.notification.NotifType;
+import com.main.accord.domain.notification.NotificationService;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -23,6 +26,8 @@ public class DmService {
     private final ChatHandler             chatHandler;
     private final DmReadStateRepository dmReadStateRepository;
     public record SendMessageRequest(String content, UUID replyToId) {};
+    private final NotificationService notificationService;
+    private final AccountRepository accountRepository; // to resolve sender name
 
     public List<Conversation> getConversations(UUID userId) {
         return conversationRepository.findAllByParticipant(userId);
@@ -85,6 +90,7 @@ public class DmService {
     @Transactional
     public DmMessage sendMessage(UUID conversationId, UUID authorId, String content, UUID replyToId) {
         assertParticipant(conversationId, authorId);
+
         DmMessage saved = dmMessageRepository.save(
                 DmMessage.builder()
                         .idConversation(conversationId)
@@ -93,8 +99,50 @@ public class DmService {
                         .idReplyTo(replyToId)
                         .build()
         );
+
         chatHandler.broadcastToDm(conversationId,
                 Map.of("type", "DM_MESSAGE_CREATE", "data", saved));
+
+        // Resolve sender name once
+        String senderName = accountRepository.findById(authorId)
+                .map(a -> a.getDsDisplayName())
+                .orElse("Someone");
+
+        // ── Reply notification ─────────────────────────────────────────────
+        if (replyToId != null) {
+            dmMessageRepository.findById(replyToId).ifPresent(parent -> {
+                if (parent.getIdAuthor() != null && !parent.getIdAuthor().equals(authorId)) {
+                    notificationService.send(
+                            parent.getIdAuthor(),
+                            NotifType.message,
+                            senderName + " replied to you",
+                            content != null ? content : "📎 Attachment",
+                            Map.of("conversationId", conversationId.toString(),
+                                    "messageId",      saved.getIdMessage().toString())
+                    );
+                }
+            });
+        }
+
+        // ── Mention notifications ──────────────────────────────────────────
+        if (content != null && content.contains("@")) {
+            participantRepository.findByIdConversationAndDtLeftIsNull(conversationId)
+                    .stream()
+                    .filter(p -> !p.getIdUser().equals(authorId))
+                    .forEach(p -> accountRepository.findById(p.getIdUser()).ifPresent(acc -> {
+                        if (content.toLowerCase().contains("@" + acc.getDsHandle().toLowerCase())) {
+                            notificationService.send(
+                                    p.getIdUser(),
+                                    NotifType.mention,
+                                    "You were mentioned by " + senderName,
+                                    content,
+                                    Map.of("conversationId", conversationId.toString(),
+                                            "messageId",      saved.getIdMessage().toString())
+                            );
+                        }
+                    }));
+        }
+
         return saved;
     }
 

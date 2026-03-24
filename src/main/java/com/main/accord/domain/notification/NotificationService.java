@@ -74,4 +74,18 @@ public class NotificationService {
         });
         notificationRepository.saveAll(unread);
     }
+
+    @Async
+    public void send(UUID recipientId, NotifType type, String title, String body, Map<String, Object> payload) {
+        Notification notif = notificationRepository.save(
+                Notification.builder()
+                        .idUser(recipientId)
+                        .tpNotif(type)
+                        .dsTitle(title)
+                        .dsBody(body)
+                        .jsPayload(payload)
+                        .build()
+        );
+        chatHandler.sendToUser(recipientId, Map.of("type", "NOTIFICATION", "data", notif));
+    }
 }

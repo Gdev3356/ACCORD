@@ -7,6 +7,8 @@ import com.main.accord.domain.dm.DmMessage;
 import com.main.accord.domain.dm.DmMessageRepository;
 import com.main.accord.domain.dm.DmReaction;
 import com.main.accord.domain.dm.DmReactionRepository;
+import com.main.accord.domain.notification.NotifType;
+import com.main.accord.domain.notification.NotificationService;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import com.main.accord.websocket.ChatHandler;
@@ -30,6 +32,7 @@ public class ReactionService {
     private final DmReactionRepository dmReactionRepository;
     private final DmMessageRepository dmMessageRepository;
     private final ChatHandler          chatHandler;
+    private final NotificationService notificationService;
 
     public List<ReactionSummary> getReactions(UUID messageId, UUID callerId) {
         return reactionRepository.countByEmojiForUser(messageId, callerId).stream()
@@ -67,10 +70,19 @@ public class ReactionService {
 
         if (!dmReactionRepository.existsByIdMessageAndIdUserAndDsEmoji(messageId, userId, emoji)) {
             dmReactionRepository.save(DmReaction.builder()
-                    .idMessage(messageId)
-                    .idUser(userId)
-                    .dsEmoji(emoji)
-                    .build());
+                    .idMessage(messageId).idUser(userId).dsEmoji(emoji).build());
+        }
+
+        // ── Reaction notification ──────────────────────────────────────────
+        if (msg.getIdAuthor() != null && !msg.getIdAuthor().equals(userId)) {
+            notificationService.send(
+                    msg.getIdAuthor(),
+                    NotifType.message,
+                    "New reaction on your message",
+                    emoji,
+                    Map.of("conversationId", msg.getIdConversation().toString(),
+                            "messageId",      messageId.toString())
+            );
         }
 
         chatHandler.broadcastToDm(msg.getIdConversation(),
