@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/messages/{messageId}/reactions")
+@RequestMapping("/api/v1/dm/messages/{messageId}/reactions")
 @RequiredArgsConstructor
 public class ReactionController {
 
