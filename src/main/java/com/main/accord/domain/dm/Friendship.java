@@ -10,7 +10,10 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "DM_FRIENDSHIP")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter @Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED) // Prevent empty instantiation
+@AllArgsConstructor(access = AccessLevel.PRIVATE) // Force use of static factory
+@Builder(access = AccessLevel.PRIVATE) // Hide builder from public use
 @IdClass(Friendship.FriendshipId.class)
 public class Friendship {
 
@@ -35,10 +38,12 @@ public class Friendship {
 
     /** Canonical ordering: always store smaller UUID as ID_USER_A */
     public static Friendship create(UUID a, UUID b, UUID requester) {
-        UUID lo = a.compareTo(b) < 0 ? a : b;
-        UUID hi = a.compareTo(b) < 0 ? b : a;
+        if (a.equals(b)) throw new IllegalArgumentException("Users must be different");
+
+        boolean aIsSmaller = a.compareTo(b) < 0;
         return Friendship.builder()
-                .idUserA(lo).idUserB(hi)
+                .idUserA(aIsSmaller ? a : b)
+                .idUserB(aIsSmaller ? b : a)
                 .idRequester(requester)
                 .stStatus(FriendStatus.pending)
                 .build();
