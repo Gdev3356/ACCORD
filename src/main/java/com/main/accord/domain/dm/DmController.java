@@ -2,6 +2,7 @@ package com.main.accord.domain.dm;
 
 import com.main.accord.common.ApiResponse;
 import com.main.accord.security.AccordPrincipal;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -100,5 +101,16 @@ public class DmController {
         return ResponseEntity.ok(ApiResponse.ok(
                 dmService.searchMessages(conversationId, principal.userId(), q, limit)
         ));
+    }
+
+    public record EditMessageRequest(String content) {}
+
+    @PatchMapping("/messages/{messageId}")
+    public ResponseEntity<ApiResponse<DmMessage>> editMessage(
+            @PathVariable UUID messageId,
+            @RequestBody @Valid EditMessageRequest req,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        DmMessage edited = dmService.editMessage(messageId, principal.userId(), req.content());
+        return ResponseEntity.ok(ApiResponse.ok(edited));
     }
 }

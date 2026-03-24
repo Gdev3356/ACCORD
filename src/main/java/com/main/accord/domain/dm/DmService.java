@@ -119,4 +119,25 @@ public class DmService {
                 conversationId, query.toLowerCase(), PageRequest.of(0, Math.min(limit, 100))
         );
     }
+
+    @Transactional
+    public DmMessage editMessage(UUID messageId, UUID editorId, String newContent) {
+        DmMessage msg = dmMessageRepository.findById(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found."));
+
+        if (!msg.getIdAuthor().equals(editorId)) {
+            throw new ForbiddenException("You can only edit your own messages.");
+        }
+
+        assertParticipant(msg.getIdConversation(), editorId);
+
+        msg.setDsContent(newContent);
+        msg.setStEdited(true);
+        DmMessage saved = dmMessageRepository.save(msg);
+
+        chatHandler.broadcastToDm(msg.getIdConversation(),
+                Map.of("type", "DM_MESSAGE_EDIT", "data", saved));
+
+        return saved;
+    }
 }
