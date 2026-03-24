@@ -9,7 +9,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "AC_PLATFORM_INVITE")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter @NoArgsConstructor @AllArgsConstructor @Builder
 public class PlatformInvite {
 
     @Id
@@ -39,4 +39,12 @@ public class PlatformInvite {
     @Builder.Default
     @Column(name = "ST_USED")
     private Boolean stUsed = false;
+
+    public void markUsed(UUID usedBy) {
+        if (Boolean.TRUE.equals(this.stUsed))
+            throw new IllegalStateException("Invite already used.");
+        this.stUsed   = true;
+        this.idUsedBy = usedBy;
+        this.dtUsed   = OffsetDateTime.now();
+    }
 }

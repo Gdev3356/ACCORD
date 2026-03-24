@@ -21,6 +21,8 @@ public class DmService {
     private final DmMessageRepository     dmMessageRepository;
     private final FriendshipRepository    friendshipRepository;
     private final ChatHandler             chatHandler;
+    private final DmReadStateRepository dmReadStateRepository;
+    public record SendMessageRequest(String content, UUID replyToId) {};
 
     public List<Conversation> getConversations(UUID userId) {
         return conversationRepository.findAllByParticipant(userId);
@@ -81,13 +83,14 @@ public class DmService {
     }
 
     @Transactional
-    public DmMessage sendMessage(UUID conversationId, UUID authorId, String content) {
+    public DmMessage sendMessage(UUID conversationId, UUID authorId, String content, UUID replyToId) {
         assertParticipant(conversationId, authorId);
         DmMessage saved = dmMessageRepository.save(
                 DmMessage.builder()
                         .idConversation(conversationId)
                         .idAuthor(authorId)
                         .dsContent(content)
+                        .idReplyTo(replyToId)
                         .build()
         );
         chatHandler.broadcastToDm(conversationId,
@@ -133,11 +136,43 @@ public class DmService {
 
         msg.setDsContent(newContent);
         msg.setStEdited(true);
+        msg.setDtEdited(java.time.OffsetDateTime.now());
         DmMessage saved = dmMessageRepository.save(msg);
 
         chatHandler.broadcastToDm(msg.getIdConversation(),
                 Map.of("type", "DM_MESSAGE_EDIT", "data", saved));
 
         return saved;
+    }
+
+    @Transactional
+    public void markRead(UUID conversationId, UUID userId, UUID lastMessageId) {
+        assertParticipant(conversationId, userId);
+        DmReadState state = dmReadStateRepository
+                .findByIdConversationAndIdUser(conversationId, userId)
+                .orElse(DmReadState.builder()
+                        .idConversation(conversationId)
+                        .idUser(userId)
+                        .build());
+        state.setIdLastReadMsg(lastMessageId);
+        state.setDtLastRead(java.time.OffsetDateTime.now());
+        dmReadStateRepository.save(state);
+    }
+
+    @Transactional
+    public void setMuted(UUID conversationId, UUID userId, boolean muted) {
+        assertParticipant(conversationId, userId);
+        DmReadState state = dmReadStateRepository
+                .findByIdConversationAndIdUser(conversationId, userId)
+                .orElse(DmReadState.builder()
+                        .idConversation(conversationId)
+                        .idUser(userId)
+                        .build());
+        state.setStMuted(muted);
+        dmReadStateRepository.save(state);
+    }
+
+    public List<UUID> getUnreadConversations(UUID userId) {
+        return dmReadStateRepository.findConversationsWithUnread(userId);
     }
 }

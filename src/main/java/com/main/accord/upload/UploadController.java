@@ -1,6 +1,7 @@
 package com.main.accord.upload;
 
 import com.main.accord.common.ApiResponse;
+import com.main.accord.domain.dm.DmAttachmentRepository;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,7 @@ import java.util.UUID;
 public class UploadController {
 
     private final UploadService uploadService;
+    private final DmAttachmentRepository dmAttachmentRepository;
 
     @PostMapping("/pfp")
     public ResponseEntity<ApiResponse<Map<String, String>>> uploadPfp(
@@ -46,6 +48,15 @@ public class UploadController {
             @AuthenticationPrincipal AccordPrincipal principal) throws IOException {
 
         String url = uploadService.uploadEmoji(serverId, principal.userId(), name, file);
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("url", url)));
+    }
+
+    @PostMapping("/dm-attachment/{messageId}")
+    public ResponseEntity<ApiResponse<Map<String, String>>> uploadDmAttachment(
+            @PathVariable UUID messageId,
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal AccordPrincipal principal) throws IOException {
+        String url = uploadService.uploadDmAttachment(messageId, file);
         return ResponseEntity.ok(ApiResponse.ok(Map.of("url", url)));
     }
 }

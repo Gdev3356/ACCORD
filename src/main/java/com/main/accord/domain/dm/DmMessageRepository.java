@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface DmMessageRepository extends JpaRepository<DmMessage, UUID> {
@@ -37,4 +38,11 @@ public interface DmMessageRepository extends JpaRepository<DmMessage, UUID> {
         ORDER BY m.dtCreated DESC
     """)
     List<DmMessage> searchContent(UUID conversationId, String query, Pageable pageable);
+
+    // For read state service
+    @Query("SELECT m FROM DmMessage m WHERE m.idConversation = :convId AND m.stDeleted = false ORDER BY m.dtCreated DESC LIMIT 1")
+    Optional<DmMessage> findLatestByConversation(UUID convId);
+
+    // For reply previews
+    Optional<DmMessage> findByIdMessage(UUID messageId); // likely already exists as findById
 }

@@ -1,5 +1,6 @@
 package com.main.accord.domain.account;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -17,10 +18,10 @@ public class Auth {
     @Column(name = "ID_USER")
     private UUID idUser;
 
-    @Column(name = "DS_EMAIL", nullable = false, unique = true, length = 100)
+    @Column(name = "DS_EMAIL", nullable = false, unique = true, length = 100, updatable = false)
     private String dsEmail;
 
-    @Column(name = "DS_PASSWORD", nullable = false)
+    @Column(name = "DS_PASSWORD", nullable = false, updatable = false)
     private String dsPassword;  // BCrypt hash — never expose this
 
     @CreationTimestamp
@@ -32,6 +33,7 @@ public class Auth {
     private Boolean stActive = true;
 
     @Builder.Default
+    @JsonIgnore
     @Column(name = "ST_ADMIN")
     private Boolean stAdmin = false;
 }

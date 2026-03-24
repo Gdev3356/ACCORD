@@ -1,9 +1,11 @@
 package com.main.accord.domain.account;
 
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.cosmetic.CosmeticRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.main.accord.common.AccordException;
 
 import java.util.UUID;
 
@@ -12,6 +14,7 @@ import java.util.UUID;
 public class VisualsService {
 
     private final VisualsRepository visualsRepository;
+    private final CosmeticRepository cosmeticRepository;
 
     public Visuals getVisuals(UUID userId) {
         return visualsRepository.findById(userId)
@@ -30,6 +33,10 @@ public class VisualsService {
         if (req.mode()        != null) visuals.setStMode(req.mode());
         if (req.decoration()  != null) visuals.setIdDecoration(req.decoration());
         if (req.effect()      != null) visuals.setIdEffect(req.effect());
+        if (req.decoration() != null && !cosmeticRepository.existsById(req.decoration()))
+            throw new AccordException("Decoration not found.");
+        if (req.effect() != null && !cosmeticRepository.existsById(req.effect()))
+            throw new AccordException("Effect not found.");
 
         return visualsRepository.save(visuals);
     }

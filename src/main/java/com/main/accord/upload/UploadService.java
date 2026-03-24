@@ -2,6 +2,8 @@ package com.main.accord.upload;
 
 import com.main.accord.common.AccordException;
 import com.main.accord.domain.account.VisualsRepository;
+import com.main.accord.domain.dm.DmAttachment;
+import com.main.accord.domain.dm.DmAttachmentRepository;
 import com.main.accord.domain.server.SvEmoji;
 import com.main.accord.domain.server.SvEmojiRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,7 @@ public class UploadService {
 
     private final S3Client          s3Client;
     private final VisualsRepository visualsRepository;
+    private final DmAttachmentRepository dmAttachmentRepository;
 
     @Value("${supabase.storage.bucket}")
     private String bucket;
@@ -182,5 +185,31 @@ public class UploadService {
             // Optionally delete from S3 here too
             emojiRepository.delete(emoji);
         });
+    }
+
+    public String uploadDmAttachment(UUID messageId, MultipartFile file) throws IOException {
+        if (file.isEmpty())
+            throw new AccordException("File is empty.");
+        if (file.getSize() > MAX_ATTACHMENT_SIZE)
+            throw new AccordException("Attachment must be under 25MB.");
+
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_ATTACHMENT_TYPES.contains(contentType.toLowerCase()))
+            throw new AccordException("File type not allowed.");
+
+        String ext = getExtension(file.getOriginalFilename());
+        String key = "dm-attachments/" + messageId + "/" + UUID.randomUUID() + ext;
+        upload(key, file.getBytes(), contentType);
+        String url = publicUrl + "/" + bucket + "/" + key;
+
+        dmAttachmentRepository.save(DmAttachment.builder()
+                .idMessage(messageId)
+                .dsUrl(url)
+                .dsFilename(file.getOriginalFilename())
+                .dsMimeType(contentType)
+                .nrSizeBytes(file.getSize())
+                .build());
+
+        return url;
     }
 }

@@ -17,6 +17,8 @@ import java.util.UUID;
 public class DmController {
 
     private final DmService dmService;
+    private final DmReadStateRepository dmReadStateRepository;
+    public record SendMessageRequest(String content, UUID replyToId) {};
 
     // GET /api/v1/dm — all conversations for current user
     @GetMapping
@@ -66,7 +68,7 @@ public class DmController {
             @RequestBody SendMessageRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
-                dmService.sendMessage(conversationId, principal.userId(), req.content())
+                dmService.sendMessage(conversationId, principal.userId(), req.content(), req.replyToId())
         ));
     }
 
@@ -89,7 +91,6 @@ public class DmController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    public record SendMessageRequest(String content) {}
     public record CreateGroupRequest(List<UUID> userIds, String name) {}
 
     @GetMapping("/{conversationId}/messages/search")
@@ -113,4 +114,30 @@ public class DmController {
         DmMessage edited = dmService.editMessage(messageId, principal.userId(), req.content());
         return ResponseEntity.ok(ApiResponse.ok(edited));
     }
+    @PostMapping("/{conversationId}/read")
+    public ResponseEntity<ApiResponse<Void>> markRead(
+            @PathVariable UUID conversationId,
+            @RequestBody MarkReadRequest req,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        dmService.markRead(conversationId, principal.userId(), req.lastMessageId());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @PatchMapping("/{conversationId}/mute")
+    public ResponseEntity<ApiResponse<Void>> setMuted(
+            @PathVariable UUID conversationId,
+            @RequestParam boolean value,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        dmService.setMuted(conversationId, principal.userId(), value);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @GetMapping("/unread")
+    public ResponseEntity<ApiResponse<List<UUID>>> getUnread(
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(dmService.getUnreadConversations(principal.userId())));
+    }
+
+    public record MarkReadRequest(UUID lastMessageId) {}
+
 }

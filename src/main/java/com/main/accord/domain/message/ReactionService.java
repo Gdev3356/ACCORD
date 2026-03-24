@@ -1,0 +1,68 @@
+package com.main.accord.domain.message;
+
+import com.main.accord.common.ForbiddenException;
+import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.channel.ChannelRepository;
+import com.main.accord.permission.PermissionService;
+import com.main.accord.permission.Permissions;
+import com.main.accord.websocket.ChatHandler;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class ReactionService {
+
+    private final ReactionRepository   reactionRepository;
+    private final MessageRepository    messageRepository;
+    private final ChannelRepository    channelRepository;
+    private final PermissionService    permissionService;
+    private final ChatHandler          chatHandler;
+
+    public List<ReactionSummary> getReactions(UUID messageId) {
+        return reactionRepository.countByEmoji(messageId).stream()
+                .map(row -> new ReactionSummary((String) row[0], (Long) row[1]))
+                .toList();
+    }
+
+    @Transactional
+    public void addReaction(UUID messageId, UUID userId, String emoji) {
+        Message msg = messageRepository.findById(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found."));
+
+        var channel = channelRepository.findById(msg.getIdChannel()).orElseThrow();
+        if (!permissionService.can(userId, msg.getIdChannel(), channel.getIdServer(), Permissions.VIEW_CHANNELS))
+            throw new ForbiddenException("You can't react here.");
+
+        if (!reactionRepository.existsByIdMessageAndIdUserAndDsEmoji(messageId, userId, emoji)) {
+            reactionRepository.save(Reaction.builder()
+                    .idMessage(messageId)
+                    .idUser(userId)
+                    .dsEmoji(emoji)
+                    .build());
+        }
+
+        chatHandler.broadcastToChannel(msg.getIdChannel(),
+                Map.of("type", "MESSAGE_REACTION_ADD",
+                        "data", Map.of("messageId", messageId, "userId", userId, "emoji", emoji)));
+    }
+
+    @Transactional
+    public void removeReaction(UUID messageId, UUID userId, String emoji) {
+        reactionRepository.deleteByIdMessageAndIdUserAndDsEmoji(messageId, userId, emoji);
+
+        messageRepository.findById(messageId).ifPresent(msg ->
+                chatHandler.broadcastToChannel(msg.getIdChannel(),
+                        Map.of("type", "MESSAGE_REACTION_REMOVE",
+                                "data", Map.of("messageId", messageId, "userId", userId, "emoji", emoji)))
+        );
+    }
+
+    public record ReactionSummary(String emoji, long count) {}
+}

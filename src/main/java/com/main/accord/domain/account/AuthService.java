@@ -1,5 +1,6 @@
 package com.main.accord.domain.account;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.main.accord.common.AccordException;
 import com.main.accord.common.NotFoundException;
 import com.main.accord.security.JwtService;
@@ -43,7 +44,7 @@ public class AuthService {
             String  idUser,
             String  dsHandle,
             String  dsDisplayName,
-            boolean isAdmin
+            @JsonProperty(access = JsonProperty.Access.READ_ONLY) boolean isAdmin
     ) {}
 
     // ── Register ──────────────────────────────────────────────────────────────
@@ -93,9 +94,7 @@ public class AuthService {
         );
 
         // 6. Mark invite used
-        invite.setStUsed(true);
-        invite.setIdUsedBy(auth.getIdUser());
-        invite.setDtUsed(OffsetDateTime.now());
+        invite.markUsed(auth.getIdUser());
         platformInviteRepository.save(invite);
 
         // 7. Issue tokens immediately — no email step
@@ -167,8 +166,7 @@ public class AuthService {
             throw new AccordException("Password must be at least 8 characters.");
         }
 
-        auth.setDsPassword(passwordEncoder.encode(req.newPassword()));
-        authRepository.save(auth);
+        authRepository.updatePassword(userId, passwordEncoder.encode(req.newPassword()));
 
         // Revoke all existing sessions — force re-login on other devices
         jwtService.revokeAllTokens(userId);

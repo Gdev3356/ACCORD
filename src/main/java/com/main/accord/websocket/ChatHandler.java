@@ -14,10 +14,10 @@ public class ChatHandler {
 
     private final SimpMessagingTemplate broker;
 
-    public void broadcastToChannel(UUID channelId, Message message) {
+    public void broadcastToChannel(UUID channelId, Object payload) {
         broker.convertAndSend(
                 "/topic/channel." + channelId,
-                new ChatEvent("MESSAGE_CREATE", message)
+                new ChatEvent("MESSAGE_CREATE", payload)
         );
     }
 
