@@ -157,4 +157,12 @@ public class DmController {
                 dmService.getConversationSummaries(principal.userId())
         ));
     }
+
+    @DeleteMapping("/messages/{messageId}")
+    public ResponseEntity<ApiResponse<Void>> deleteMessage(
+            @PathVariable UUID messageId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        dmService.deleteMessage(messageId, principal.userId());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
 }

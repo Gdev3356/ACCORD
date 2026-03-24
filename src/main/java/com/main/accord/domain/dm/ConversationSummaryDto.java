@@ -16,4 +16,5 @@ public class ConversationSummaryDto {
     private String  otherPfpUrl;
     private String  otherPresence;
     private boolean isFriend;
+    private Integer nrUnread;
 }

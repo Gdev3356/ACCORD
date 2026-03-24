@@ -14,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -184,6 +185,11 @@ public class DmService {
             throw new ForbiddenException("You can only edit your own messages.");
         }
 
+        if (msg.getDtCreated() != null &&
+                msg.getDtCreated().isBefore(OffsetDateTime.now().minusHours(3))) {
+            throw new ForbiddenException("Messages can only be edited within 3 hours of sending.");
+        }
+
         assertParticipant(msg.getIdConversation(), editorId);
 
         msg.setDsContent(newContent);
@@ -263,6 +269,22 @@ public class DmService {
                     .map(f -> f.getStStatus() == FriendStatus.accepted)
                     .orElse(false);
 
+            DmReadState readState = dmReadStateRepository
+                    .findByIdConversationAndIdUser(c.getIdConversation(), userId)
+                    .orElse(null);
+
+            int unread = 0;
+            if (readState != null && readState.getDtLastRead() != null) {
+                unread = (int) dmMessageRepository.countUnreadSince(
+                        c.getIdConversation(), readState.getDtLastRead()
+                );
+            } else if (readState == null) {
+                // Never opened — count everything
+                unread = (int) dmMessageRepository.countUnreadSince(
+                        c.getIdConversation(), OffsetDateTime.parse("1970-01-01T00:00:00Z")
+                );
+            }
+
             return ConversationSummaryDto.builder()
                     .idConversation(c.getIdConversation())
                     .stGroup(false)
@@ -271,7 +293,26 @@ public class DmService {
                     .otherPfpUrl(visuals != null ? visuals.getDsPfpUrl() : null)
                     .otherPresence(other != null ? other.getStPresence().name() : "offline")
                     .isFriend(isFriend)
+                    .nrUnread(unread)
                     .build();
         }).toList();
+    }
+
+    @Transactional
+    public void deleteMessage(UUID messageId, UUID requesterId) {
+        DmMessage msg = dmMessageRepository.findById(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found."));
+
+        if (!msg.getIdAuthor().equals(requesterId))
+            throw new ForbiddenException("You can only delete your own messages.");
+
+        assertParticipant(msg.getIdConversation(), requesterId);
+
+        msg.setStDeleted(true);
+        msg.setDsContent(null);
+        dmMessageRepository.save(msg);
+
+        chatHandler.broadcastToDm(msg.getIdConversation(),
+                Map.of("type", "DM_MESSAGE_DELETE", "data", Map.of("messageId", messageId)));
     }
 }

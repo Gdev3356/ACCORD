@@ -4,6 +4,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,4 +46,7 @@ public interface DmMessageRepository extends JpaRepository<DmMessage, UUID> {
 
     // For reply previews
     Optional<DmMessage> findByIdMessage(UUID messageId); // likely already exists as findById
+
+    @Query("SELECT COUNT(m) FROM DmMessage m WHERE m.idConversation = :convId AND m.stDeleted = false AND m.dtCreated > :since")
+    long countUnreadSince(UUID convId, OffsetDateTime since);
 }
