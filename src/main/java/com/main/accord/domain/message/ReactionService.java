@@ -40,12 +40,14 @@ public class ReactionService {
         Map<UUID, List<ReactionSummary>> result = new LinkedHashMap<>();
         messageIds.forEach(id -> result.put(id, new java.util.ArrayList<>()));
 
+        if (messageIds.isEmpty()) return result;
+
         reactionRepository.countByEmojiForUserBatch(messageIds, callerId)
                 .forEach(row -> {
-                    UUID   msgId      = (UUID)    row[0];
-                    String emoji      = (String)  row[1];
-                    long   count      = (Long)    row[2];
-                    boolean reactedByMe = (Boolean) row[3];
+                    UUID    msgId      = (UUID)   row[0];
+                    String  emoji      = (String) row[1];
+                    long    count      = ((Number) row[2]).longValue();
+                    boolean reactedByMe = row[3] != null && ((Number) row[3]).longValue() > 0;
                     result.get(msgId).add(new ReactionSummary(emoji, count, reactedByMe));
                 });
 

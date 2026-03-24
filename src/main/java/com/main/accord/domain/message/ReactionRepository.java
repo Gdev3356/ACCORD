@@ -30,7 +30,7 @@ public interface ReactionRepository extends JpaRepository<Reaction, ReactionId> 
 
     @Query("""
     SELECT r.idMessage, r.dsEmoji, COUNT(r),
-           SUM(CASE WHEN r.idUser = :callerId THEN 1 ELSE 0 END) > 0
+           SUM(CASE WHEN r.idUser = :callerId THEN 1 ELSE 0 END)
     FROM Reaction r
     WHERE r.idMessage IN :messageIds
     GROUP BY r.idMessage, r.dsEmoji
