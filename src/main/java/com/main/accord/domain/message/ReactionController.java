@@ -43,7 +43,7 @@ public class ReactionController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    @PostMapping("/api/v1/messages/reactions/batch")
+    @PostMapping("/api/v1/dm/messages/reactions/batch")
     public ResponseEntity<ApiResponse<Map<UUID, List<ReactionService.ReactionSummary>>>> batchReactions(
             @RequestBody  BatchReactionsRequest request,
             @AuthenticationPrincipal AccordPrincipal principal) {

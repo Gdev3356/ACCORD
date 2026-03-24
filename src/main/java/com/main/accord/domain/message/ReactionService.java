@@ -70,7 +70,7 @@ public class ReactionService {
         }
 
         chatHandler.broadcastToChannel(msg.getIdChannel(),
-                Map.of("type", "MESSAGE_REACTION_ADD",
+                Map.of("type", "DM_REACTION_ADD",
                         "data", Map.of("messageId", messageId, "userId", userId, "emoji", emoji)));
     }
 
@@ -80,7 +80,7 @@ public class ReactionService {
 
         messageRepository.findById(messageId).ifPresent(msg ->
                 chatHandler.broadcastToChannel(msg.getIdChannel(),
-                        Map.of("type", "MESSAGE_REACTION_REMOVE",
+                        Map.of("type", "DM_REACTION_REMOVE",
                                 "data", Map.of("messageId", messageId, "userId", userId, "emoji", emoji)))
         );
     }
