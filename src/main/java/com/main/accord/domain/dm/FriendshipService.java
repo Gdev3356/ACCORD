@@ -22,7 +22,7 @@ public class FriendshipService {
     private final FriendshipRepository friendshipRepository;
     private final ChatHandler          chatHandler;
     private final NotificationRepository notificationRepository;
-    
+
     // ── Send a friend request ─────────────────────────────────────────────────
 
     @Transactional
@@ -69,17 +69,26 @@ public class FriendshipService {
         Friendship f = friendshipRepository.findBetween(requesterId, acceptorId)
                 .orElseThrow(() -> new NotFoundException("Friend request not found."));
 
-        if (f.getStStatus() != FriendStatus.pending) {
+        if (f.getStStatus() != FriendStatus.pending)
             throw new AccordException("No pending request to accept.");
-        }
-        if (f.getIdRequester().equals(acceptorId)) {
+        if (f.getIdRequester().equals(acceptorId))
             throw new AccordException("You can't accept your own request.");
-        }
 
         f.setStStatus(FriendStatus.accepted);
         Friendship saved = friendshipRepository.save(f);
 
-        // Notify the original requester
+        // Persist notification for the original requester
+        notificationRepository.save(
+                Notification.builder()
+                        .idUser(requesterId)
+                        .tpNotif(NotifType.friend_accepted)
+                        .dsTitle("Friend Request Accepted")
+                        .dsBody("Your friend request was accepted.")
+                        .jsPayload(Map.of("by", acceptorId.toString()))
+                        .build()
+        );
+
+        // Real-time push
         chatHandler.sendToUser(requesterId, Map.of(
                 "type", "FRIEND_ACCEPTED",
                 "data", Map.of("by", acceptorId)
@@ -95,11 +104,31 @@ public class FriendshipService {
         Friendship f = friendshipRepository.findBetween(userId, otherId)
                 .orElseThrow(() -> new NotFoundException("Friend request not found."));
 
-        if (f.getStStatus() != FriendStatus.pending) {
+        if (f.getStStatus() != FriendStatus.pending)
             throw new AccordException("No pending request to decline.");
-        }
+
+        // Only notify if the other person was the one who sent it
+        UUID requesterId = f.getIdRequester();
+        boolean otherPersonSentIt = !requesterId.equals(userId);
 
         friendshipRepository.delete(f);
+
+        if (otherPersonSentIt) {
+            notificationRepository.save(
+                    Notification.builder()
+                            .idUser(requesterId)
+                            .tpNotif(NotifType.system)
+                            .dsTitle("Friend Request Declined")
+                            .dsBody("Your friend request was declined.")
+                            .jsPayload(Map.of("by", userId.toString()))
+                            .build()
+            );
+
+            chatHandler.sendToUser(requesterId, Map.of(
+                    "type", "FRIEND_DECLINED",
+                    "data", Map.of("by", userId)
+            ));
+        }
     }
 
     // ── Remove friend ─────────────────────────────────────────────────────────
@@ -157,6 +186,7 @@ public class FriendshipService {
                 .map(f -> f.getIdUserA().equals(userId) ? f.getIdUserB() : f.getIdUserA())
                 .toList();
     }
+
     // ── Queries ───────────────────────────────────────────────────────────────
 
     public List<Friendship> getFriends(UUID userId) {
