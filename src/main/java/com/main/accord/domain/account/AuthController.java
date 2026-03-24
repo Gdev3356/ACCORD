@@ -48,4 +48,10 @@ public class AuthController {
     }
 
     public record RefreshRequest(String refreshToken) {}
+
+    @GetMapping("/@me/admin-status")
+    public ResponseEntity<ApiResponse<Boolean>> getAdminStatus(
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(principal.isAdmin()));
+    }
 }
