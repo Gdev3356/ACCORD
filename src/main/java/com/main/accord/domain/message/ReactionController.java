@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/dm/messages/{messageId}/reactions")
+@RequestMapping("/api/v1/dm/messages//{messageId}/reactions")
 @RequiredArgsConstructor
 public class ReactionController {
 
@@ -42,15 +42,4 @@ public class ReactionController {
         reactionService.removeReaction(messageId, principal.userId(), emoji);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
-
-    @PostMapping("/api/v1/dm/messages/reactions/batch")
-    public ResponseEntity<ApiResponse<Map<UUID, List<ReactionService.ReactionSummary>>>> batchReactions(
-            @RequestBody  BatchReactionsRequest request,
-            @AuthenticationPrincipal AccordPrincipal principal) {
-
-        return ResponseEntity.ok(ApiResponse.ok(
-                reactionService.getReactionsBatch(request.messageIds(), principal.userId())));
-    }
-
-    public record BatchReactionsRequest(List<UUID> messageIds) {}
 }
