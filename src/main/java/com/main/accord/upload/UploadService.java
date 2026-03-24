@@ -202,12 +202,30 @@ public class UploadService {
         upload(key, file.getBytes(), contentType);
         String url = publicUrl + "/" + bucket + "/" + key;
 
+        // ── Resolve image dimensions if applicable ────────────────────────────────
+        Integer width  = null;
+        Integer height = null;
+        if (contentType.startsWith("image/")) {
+            try {
+                BufferedImage img = ImageIO.read(file.getInputStream());
+                if (img != null) {
+                    width  = img.getWidth();
+                    height = img.getHeight();
+                }
+            } catch (IOException ignored) {
+                // Non-fatal — dimensions stay null; frontend falls back gracefully
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────────────
+
         dmAttachmentRepository.save(DmAttachment.builder()
                 .idMessage(messageId)
                 .dsUrl(url)
                 .dsFilename(file.getOriginalFilename())
                 .dsMimeType(contentType)
                 .nrSizeBytes(file.getSize())
+                .nrWidth(width)
+                .nrHeight(height)
                 .build());
 
         return url;
