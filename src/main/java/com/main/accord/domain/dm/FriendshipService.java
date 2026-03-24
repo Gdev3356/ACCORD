@@ -38,8 +38,13 @@ public class FriendshipService {
             }
         });
 
+        // 1. Determine which ID is "smaller"
+        UUID userA = requesterId.compareTo(targetId) < 0 ? requesterId : targetId;
+        UUID userB = requesterId.compareTo(targetId) < 0 ? targetId : requesterId;
+
+        // 2. Save using the ordered IDs
         Friendship saved = friendshipRepository.save(
-                Friendship.create(requesterId, targetId, requesterId)
+                Friendship.create(userA, userB, requesterId)
         );
 
         // Persist notification so it survives missed WS events
