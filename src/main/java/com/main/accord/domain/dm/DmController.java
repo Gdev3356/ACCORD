@@ -149,4 +149,12 @@ public class DmController {
                 dmService.getMessage(messageId, principal.userId())
         ));
     }
+
+    @GetMapping("/summary")
+    public ResponseEntity<ApiResponse<List<ConversationSummaryDto>>> getSummaries(
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                dmService.getConversationSummaries(principal.userId())
+        ));
+    }
 }

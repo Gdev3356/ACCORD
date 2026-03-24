@@ -2,7 +2,10 @@ package com.main.accord.domain.dm;
 
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.account.Account;
 import com.main.accord.domain.account.AccountRepository;
+import com.main.accord.domain.account.Visuals;
+import com.main.accord.domain.account.VisualsRepository;
 import com.main.accord.domain.notification.NotifType;
 import com.main.accord.domain.notification.NotificationService;
 import com.main.accord.websocket.ChatHandler;
@@ -28,6 +31,7 @@ public class DmService {
     public record SendMessageRequest(String content, UUID replyToId) {};
     private final NotificationService notificationService;
     private final AccountRepository accountRepository; // to resolve sender name
+    private final VisualsRepository visualsRepository;
 
     public List<Conversation> getConversations(UUID userId) {
         return conversationRepository.findAllByParticipant(userId);
@@ -231,4 +235,44 @@ public class DmService {
         return msg;
     }
 
+
+    public List<ConversationSummaryDto> getConversationSummaries(UUID userId) {
+        List<Conversation> convos = conversationRepository.findByParticipant(userId);
+
+        return convos.stream().map(c -> {
+            if (c.isStGroup()) {
+                return ConversationSummaryDto.builder()
+                        .idConversation(c.getIdConversation())
+                        .stGroup(true)
+                        .dsName(c.getDsName())
+                        .build();
+            }
+
+            // Find the other participant
+            UUID otherId = participantRepository.findOtherParticipant(c.getIdConversation(), userId);
+            if (otherId == null) {
+                return ConversationSummaryDto.builder()
+                        .idConversation(c.getIdConversation())
+                        .stGroup(false)
+                        .build();
+            }
+
+            Account other   = accountRepository.findById(otherId).orElse(null);
+            Visuals visuals = visualsRepository.findById(otherId).orElse(null);
+
+            boolean isFriend = friendshipRepository.findBetween(userId, otherId)
+                    .map(f -> f.getStStatus() == FriendStatus.accepted)
+                    .orElse(false);
+
+            return ConversationSummaryDto.builder()
+                    .idConversation(c.getIdConversation())
+                    .stGroup(false)
+                    .otherId(otherId)
+                    .otherDisplayName(other != null ? other.getDsDisplayName() : "User")
+                    .otherPfpUrl(visuals != null ? visuals.getDsPfpUrl() : null)
+                    .otherPresence(other != null ? other.getStPresence().name() : "offline")
+                    .isFriend(isFriend)
+                    .build();
+        }).toList();
+    }
 }
