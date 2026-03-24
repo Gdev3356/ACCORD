@@ -25,10 +25,31 @@ public class ReactionService {
     private final PermissionService    permissionService;
     private final ChatHandler          chatHandler;
 
-    public List<ReactionSummary> getReactions(UUID messageId) {
-        return reactionRepository.countByEmoji(messageId).stream()
-                .map(row -> new ReactionSummary((String) row[0], (Long) row[1]))
+    public List<ReactionSummary> getReactions(UUID messageId, UUID callerId) {
+        return reactionRepository.countByEmojiForUser(messageId, callerId).stream()
+                .map(row -> new ReactionSummary(
+                        (String)  row[0],
+                        (Long)    row[1],
+                        (Boolean) row[2]))
                 .toList();
+    }
+
+    public Map<UUID, List<ReactionSummary>> getReactionsBatch(List<UUID> messageIds, UUID callerId) {
+        // Pre-populate every requested ID with an empty list so missing keys don't cause
+        // frontend null-checks to fail
+        Map<UUID, List<ReactionSummary>> result = new LinkedHashMap<>();
+        messageIds.forEach(id -> result.put(id, new java.util.ArrayList<>()));
+
+        reactionRepository.countByEmojiForUserBatch(messageIds, callerId)
+                .forEach(row -> {
+                    UUID   msgId      = (UUID)    row[0];
+                    String emoji      = (String)  row[1];
+                    long   count      = (Long)    row[2];
+                    boolean reactedByMe = (Boolean) row[3];
+                    result.get(msgId).add(new ReactionSummary(emoji, count, reactedByMe));
+                });
+
+        return result;
     }
 
     @Transactional
@@ -64,5 +85,5 @@ public class ReactionService {
         );
     }
 
-    public record ReactionSummary(String emoji, long count) {}
+    public record ReactionSummary(String emoji, long count, boolean reactedByMe) {}
 }

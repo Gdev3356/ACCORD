@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -18,8 +19,10 @@ public class ReactionController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ReactionService.ReactionSummary>>> getReactions(
-            @PathVariable UUID messageId) {
-        return ResponseEntity.ok(ApiResponse.ok(reactionService.getReactions(messageId)));
+            @PathVariable UUID messageId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                reactionService.getReactions(messageId, principal.userId())));
     }
 
     @PutMapping("/{emoji}")
@@ -39,4 +42,15 @@ public class ReactionController {
         reactionService.removeReaction(messageId, principal.userId(), emoji);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
+
+    @PostMapping("/api/v1/messages/reactions/batch")
+    public ResponseEntity<ApiResponse<Map<UUID, List<ReactionService.ReactionSummary>>>> batchReactions(
+            @RequestBody  BatchReactionsRequest request,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+
+        return ResponseEntity.ok(ApiResponse.ok(
+                reactionService.getReactionsBatch(request.messageIds(), principal.userId())));
+    }
+
+    public record BatchReactionsRequest(List<UUID> messageIds) {}
 }
