@@ -40,7 +40,7 @@ public class Friendship {
     public static Friendship create(UUID a, UUID b, UUID requester) {
         if (a.equals(b)) throw new IllegalArgumentException("Users must be different");
 
-        boolean aIsSmaller = a.compareTo(b) < 0;
+        boolean aIsSmaller = a.toString().compareTo(b.toString()) < 0;
         return Friendship.builder()
                 .idUserA(aIsSmaller ? a : b)
                 .idUserB(aIsSmaller ? b : a)

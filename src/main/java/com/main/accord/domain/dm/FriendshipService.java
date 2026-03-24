@@ -39,8 +39,8 @@ public class FriendshipService {
         });
 
         // 1. Determine which ID is "smaller"
-        UUID userA = requesterId.compareTo(targetId) < 0 ? requesterId : targetId;
-        UUID userB = requesterId.compareTo(targetId) < 0 ? targetId : requesterId;
+        UUID userA = requesterId.toString().compareTo(targetId.toString()) < 0 ? requesterId : targetId;
+        UUID userB = requesterId.toString().compareTo(targetId.toString()) < 0 ? targetId : requesterId;
 
         // 2. Save using the ordered IDs
         Friendship saved = friendshipRepository.save(
