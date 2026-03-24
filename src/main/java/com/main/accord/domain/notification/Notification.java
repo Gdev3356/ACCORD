@@ -5,7 +5,6 @@ import org.hibernate.type.SqlTypes;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.Type;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -25,8 +24,8 @@ public class Notification {
     private UUID idUser;
 
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "TP_NOTIF", nullable = false, columnDefinition = "notif_type")
+    @Column(name = "TP_NOTIF", nullable = false)
+    @org.hibernate.annotations.ColumnTransformer(write = "?::notif_type")
     private NotifType tpNotif;
 
     @Column(name = "DS_TITLE", length = 150)
