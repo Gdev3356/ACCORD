@@ -237,10 +237,10 @@ public class DmService {
 
 
     public List<ConversationSummaryDto> getConversationSummaries(UUID userId) {
-        List<Conversation> convos = conversationRepository.findByParticipant(userId);
+        List<Conversation> convos = conversationRepository.findAllByParticipant(userId); // ← fix 1
 
         return convos.stream().map(c -> {
-            if (c.isStGroup()) {
+            if (Boolean.TRUE.equals(c.getStGroup())) { // ← fix 2
                 return ConversationSummaryDto.builder()
                         .idConversation(c.getIdConversation())
                         .stGroup(true)
@@ -248,7 +248,6 @@ public class DmService {
                         .build();
             }
 
-            // Find the other participant
             UUID otherId = participantRepository.findOtherParticipant(c.getIdConversation(), userId);
             if (otherId == null) {
                 return ConversationSummaryDto.builder()
