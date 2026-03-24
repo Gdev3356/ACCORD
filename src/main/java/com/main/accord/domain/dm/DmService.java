@@ -175,4 +175,12 @@ public class DmService {
     public List<UUID> getUnreadConversations(UUID userId) {
         return dmReadStateRepository.findConversationsWithUnread(userId);
     }
+
+    public DmMessage getMessage(UUID messageId, UUID requesterId) {
+        DmMessage msg = dmMessageRepository.findById(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found."));
+        assertParticipant(msg.getIdConversation(), requesterId);
+        return msg;
+    }
+
 }

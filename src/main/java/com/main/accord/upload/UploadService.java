@@ -4,8 +4,10 @@ import com.main.accord.common.AccordException;
 import com.main.accord.domain.account.VisualsRepository;
 import com.main.accord.domain.dm.DmAttachment;
 import com.main.accord.domain.dm.DmAttachmentRepository;
+import com.main.accord.domain.dm.DmMessageRepository;
 import com.main.accord.domain.server.SvEmoji;
 import com.main.accord.domain.server.SvEmojiRepository;
+import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -29,6 +32,8 @@ public class UploadService {
     private final S3Client          s3Client;
     private final VisualsRepository visualsRepository;
     private final DmAttachmentRepository dmAttachmentRepository;
+    private final ChatHandler chatHandler;
+    private final DmMessageRepository dmMessageRepository;
 
     @Value("${supabase.storage.bucket}")
     private String bucket;
@@ -227,6 +232,14 @@ public class UploadService {
                 .nrWidth(width)
                 .nrHeight(height)
                 .build());
+
+// Broadcast the updated message so all participants see the attachment immediately
+        dmMessageRepository.findById(messageId).ifPresent(msg ->
+                chatHandler.broadcastToDm(
+                        msg.getIdConversation(),
+                        Map.of("type", "DM_MESSAGE_EDIT", "data", msg)
+                )
+        );
 
         return url;
     }

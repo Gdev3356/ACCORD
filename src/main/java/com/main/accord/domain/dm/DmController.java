@@ -140,4 +140,13 @@ public class DmController {
 
     public record MarkReadRequest(UUID lastMessageId) {}
 
+    @GetMapping("/messages/{messageId}")
+
+    public ResponseEntity<ApiResponse<DmMessage>> getMessage(
+            @PathVariable UUID messageId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                dmService.getMessage(messageId, principal.userId())
+        ));
+    }
 }
