@@ -19,11 +19,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FriendshipService {
 
-    private final FriendshipRepository friendshipRepository;
-    private final ChatHandler          chatHandler;
+    private final FriendshipRepository   friendshipRepository;
+    private final ChatHandler            chatHandler;
     private final NotificationRepository notificationRepository;
-
-    // ── Send a friend request ─────────────────────────────────────────────────
 
     @Transactional
     public Friendship sendRequest(UUID requesterId, UUID targetId) {
@@ -38,16 +36,13 @@ public class FriendshipService {
             }
         });
 
-        // 1. Determine which ID is "smaller"
         UUID userA = requesterId.toString().compareTo(targetId.toString()) < 0 ? requesterId : targetId;
         UUID userB = requesterId.toString().compareTo(targetId.toString()) < 0 ? targetId : requesterId;
 
-        // 2. Save using the ordered IDs
         Friendship saved = friendshipRepository.save(
                 Friendship.create(userA, userB, requesterId)
         );
 
-        // Persist notification so it survives missed WS events
         Notification notif = notificationRepository.save(
                 Notification.builder()
                         .idUser(targetId)
@@ -58,16 +53,10 @@ public class FriendshipService {
                         .build()
         );
 
-        // Also push real-time
-        chatHandler.sendToUser(targetId, Map.of(
-                "type", "FRIEND_REQUEST",
-                "data", Map.of("from", requesterId)
-        ));
+        chatHandler.sendToUser(targetId, Map.of("type", "NOTIFICATION", "data", notif));
 
         return saved;
     }
-
-    // ── Accept ────────────────────────────────────────────────────────────────
 
     @Transactional
     public Friendship acceptRequest(UUID acceptorId, UUID requesterId) {
@@ -82,8 +71,7 @@ public class FriendshipService {
         f.setStStatus(FriendStatus.accepted);
         Friendship saved = friendshipRepository.save(f);
 
-        // Persist notification for the original requester
-        notificationRepository.save(
+        Notification notif = notificationRepository.save(
                 Notification.builder()
                         .idUser(requesterId)
                         .tpNotif(NotifType.friend_accepted)
@@ -93,16 +81,10 @@ public class FriendshipService {
                         .build()
         );
 
-        // Real-time push
-        chatHandler.sendToUser(requesterId, Map.of(
-                "type", "FRIEND_ACCEPTED",
-                "data", Map.of("by", acceptorId)
-        ));
+        chatHandler.sendToUser(requesterId, Map.of("type", "NOTIFICATION", "data", notif));
 
         return saved;
     }
-
-    // ── Decline / cancel ──────────────────────────────────────────────────────
 
     @Transactional
     public void declineOrCancel(UUID userId, UUID otherId) {
@@ -112,14 +94,13 @@ public class FriendshipService {
         if (f.getStStatus() != FriendStatus.pending)
             throw new AccordException("No pending request to decline.");
 
-        // Only notify if the other person was the one who sent it
         UUID requesterId = f.getIdRequester();
         boolean otherPersonSentIt = !requesterId.equals(userId);
 
         friendshipRepository.delete(f);
 
         if (otherPersonSentIt) {
-            notificationRepository.save(
+            Notification notif = notificationRepository.save(
                     Notification.builder()
                             .idUser(requesterId)
                             .tpNotif(NotifType.system)
@@ -129,10 +110,7 @@ public class FriendshipService {
                             .build()
             );
 
-            chatHandler.sendToUser(requesterId, Map.of(
-                    "type", "FRIEND_DECLINED",
-                    "data", Map.of("by", userId)
-            ));
+            chatHandler.sendToUser(requesterId, Map.of("type", "NOTIFICATION", "data", notif));
         }
     }
 
@@ -143,9 +121,8 @@ public class FriendshipService {
         Friendship f = friendshipRepository.findBetween(userId, otherId)
                 .orElseThrow(() -> new NotFoundException("Friendship not found."));
 
-        if (f.getStStatus() != FriendStatus.accepted) {
+        if (f.getStStatus() != FriendStatus.accepted)
             throw new AccordException("You are not friends with this user.");
-        }
 
         friendshipRepository.delete(f);
     }
@@ -154,16 +131,13 @@ public class FriendshipService {
 
     @Transactional
     public Friendship block(UUID blockerId, UUID targetId) {
-        if (blockerId.equals(targetId)) {
+        if (blockerId.equals(targetId))
             throw new AccordException("You can't block yourself.");
-        }
 
-        // If a friendship/request exists, overwrite the status to blocked
         Friendship f = friendshipRepository.findBetween(blockerId, targetId)
                 .orElse(Friendship.create(blockerId, targetId, blockerId));
 
         f.setStStatus(FriendStatus.blocked);
-        // Track who blocked — store blocker as requester for this purpose
         f.setIdRequester(blockerId);
         return friendshipRepository.save(f);
     }
@@ -175,12 +149,10 @@ public class FriendshipService {
         Friendship f = friendshipRepository.findBetween(blockerId, targetId)
                 .orElseThrow(() -> new NotFoundException("No block found."));
 
-        if (f.getStStatus() != FriendStatus.blocked) {
+        if (f.getStStatus() != FriendStatus.blocked)
             throw new AccordException("This user is not blocked.");
-        }
-        if (!f.getIdRequester().equals(blockerId)) {
+        if (!f.getIdRequester().equals(blockerId))
             throw new ForbiddenException("You didn't block this user.");
-        }
 
         friendshipRepository.delete(f);
     }
@@ -192,17 +164,7 @@ public class FriendshipService {
                 .toList();
     }
 
-    // ── Queries ───────────────────────────────────────────────────────────────
-
-    public List<Friendship> getFriends(UUID userId) {
-        return friendshipRepository.findAcceptedByUser(userId);
-    }
-
-    public List<Friendship> getIncomingRequests(UUID userId) {
-        return friendshipRepository.findIncomingRequests(userId);
-    }
-
-    public List<Friendship> getOutgoingRequests(UUID userId) {
-        return friendshipRepository.findOutgoingRequests(userId);
-    }
+    public List<Friendship> getFriends(UUID userId)           { return friendshipRepository.findAcceptedByUser(userId); }
+    public List<Friendship> getIncomingRequests(UUID userId)  { return friendshipRepository.findIncomingRequests(userId); }
+    public List<Friendship> getOutgoingRequests(UUID userId)  { return friendshipRepository.findOutgoingRequests(userId); }
 }
