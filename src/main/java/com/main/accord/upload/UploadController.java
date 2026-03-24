@@ -1,7 +1,11 @@
 package com.main.accord.upload;
 
 import com.main.accord.common.ApiResponse;
+import com.main.accord.common.ForbiddenException;
+import com.main.accord.common.NotFoundException;
 import com.main.accord.domain.dm.DmAttachmentRepository;
+import com.main.accord.domain.dm.DmMessage;
+import com.main.accord.domain.dm.DmMessageRepository;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +24,7 @@ public class UploadController {
 
     private final UploadService uploadService;
     private final DmAttachmentRepository dmAttachmentRepository;
+    private final DmMessageRepository dmMessageRepository;
 
     @PostMapping("/pfp")
     public ResponseEntity<ApiResponse<Map<String, String>>> uploadPfp(
@@ -56,6 +61,16 @@ public class UploadController {
             @PathVariable UUID messageId,
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal AccordPrincipal principal) throws IOException {
+
+        // ── Security: only the message author may attach files ────────────────
+        DmMessage message = dmMessageRepository.findById(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found."));
+
+        if (!message.getIdAuthor().equals(principal.userId())) {
+            throw new ForbiddenException("You can only attach files to your own messages.");
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         String url = uploadService.uploadDmAttachment(messageId, file);
         return ResponseEntity.ok(ApiResponse.ok(Map.of("url", url)));
     }

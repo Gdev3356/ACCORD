@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -15,6 +16,10 @@ public class DmMessage {
     @Id @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "ID_MESSAGE")
     private UUID idMessage;
+
+    @OneToMany(fetch = FetchType.EAGER)
+    @JoinColumn(name = "ID_MESSAGE", referencedColumnName = "ID_MESSAGE", insertable = false, updatable = false)
+    private List<DmAttachment> attachments = new java.util.ArrayList<>();
 
     @Column(name = "ID_CONVERSATION", nullable = false)
     private UUID idConversation;
