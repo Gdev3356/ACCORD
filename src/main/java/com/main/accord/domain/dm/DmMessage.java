@@ -1,5 +1,6 @@
 package com.main.accord.domain.dm;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -38,6 +39,7 @@ public class DmMessage {
     @Builder.Default @Column(name = "ST_DELETED") private Boolean stDeleted = false;
 
     @CreationTimestamp
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", timezone = "UTC")
     @Column(name = "DT_CREATED", updatable = false)
     private OffsetDateTime dtCreated;
 
