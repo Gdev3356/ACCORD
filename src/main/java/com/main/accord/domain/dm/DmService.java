@@ -29,10 +29,11 @@ public class DmService {
     private final FriendshipRepository    friendshipRepository;
     private final ChatHandler             chatHandler;
     private final DmReadStateRepository dmReadStateRepository;
-    public record SendMessageRequest(String content, UUID replyToId) {};
+    public record SendMessageRequest(String content, UUID replyToId, UUID forwardAttachmentFrom) {}
     private final NotificationService notificationService;
     private final AccountRepository accountRepository; // to resolve sender name
     private final VisualsRepository visualsRepository;
+    private final DmAttachmentRepository dmAttachmentRepository;
 
     public List<Conversation> getConversations(UUID userId) {
         return conversationRepository.findAllByParticipant(userId);
@@ -93,7 +94,7 @@ public class DmService {
     }
 
     @Transactional
-    public DmMessage sendMessage(UUID conversationId, UUID authorId, String content, UUID replyToId) {
+    public DmMessage sendMessage(UUID conversationId, UUID authorId, String content, UUID replyToId, UUID forwardAttachmentFrom) {
         assertParticipant(conversationId, authorId);
 
         DmMessage saved = dmMessageRepository.save(
@@ -104,6 +105,26 @@ public class DmService {
                         .idReplyTo(replyToId)
                         .build()
         );
+
+        // ── Clone attachments from forwarded message ───────────────────────
+        if (forwardAttachmentFrom != null) {
+            List<DmAttachment> originals = dmAttachmentRepository.findByIdMessage(forwardAttachmentFrom);
+            if (!originals.isEmpty()) {
+                List<DmAttachment> clones = originals.stream()
+                        .map(att -> DmAttachment.builder()
+                                .idMessage(saved.getIdMessage())
+                                .dsUrl(att.getDsUrl())
+                                .dsFilename(att.getDsFilename())
+                                .dsMimeType(att.getDsMimeType())
+                                .nrSizeBytes(att.getNrSizeBytes())
+                                .nrWidth(att.getNrWidth())
+                                .nrHeight(att.getNrHeight())
+                                .build())
+                        .toList();
+                dmAttachmentRepository.saveAll(clones);
+                saved.setAttachments(clones);
+            }
+        }
 
         chatHandler.broadcastToDm(conversationId,
                 Map.of("type", "DM_MESSAGE_CREATE", "data", saved));
