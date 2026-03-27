@@ -60,20 +60,33 @@ public interface DmMessageRepository extends JpaRepository<DmMessage, UUID> {
     UPDATE DM_MESSAGE
     SET    TS_CONTENT = to_tsvector('english', :plaintext)
     WHERE  ID_MESSAGE = :id
+      AND  :plaintext IS NOT NULL
+      AND  LENGTH(TRIM(:plaintext)) > 0
 """, nativeQuery = true)
-    void updateSearchVector(@Param("id") UUID id,
+    void updateSearchVector(@Param("id")        UUID id,
                             @Param("plaintext") String plaintext);
 
     // Ranked full-text search
     @Query(value = """
-    SELECT * FROM DM_MESSAGE
-    WHERE  ID_CONVERSATION = :convId
-      AND  ST_DELETED      = FALSE
-      AND  TS_CONTENT      @@ plainto_tsquery('english', :query)
+    SELECT
+        ID_MESSAGE,
+        ID_CONVERSATION,
+        ID_AUTHOR,
+        ID_REPLY_TO,
+        DS_CONTENT,
+        ST_EDITED,
+        ST_DELETED,
+        DT_CREATED,
+        DT_EDITED,
+        ID_FORWARDED_FROM
+    FROM  DM_MESSAGE
+    WHERE ID_CONVERSATION = :convId
+      AND ST_DELETED      = FALSE
+      AND TS_CONTENT      @@ plainto_tsquery('english', :query)
     ORDER BY ts_rank(TS_CONTENT, plainto_tsquery('english', :query)) DESC
-    LIMIT  :limit
+    LIMIT :limit
 """, nativeQuery = true)
-    List<DmMessage> fullTextSearch(@Param("convId")  UUID convId,
-                                   @Param("query")   String query,
-                                   @Param("limit")   int limit);
+    List<DmMessage> fullTextSearch(@Param("convId") UUID convId,
+                                   @Param("query")  String query,
+                                   @Param("limit")  int limit);
 }
