@@ -74,4 +74,13 @@ public class UploadController {
         String url = uploadService.uploadDmAttachment(messageId, file);
         return ResponseEntity.ok(ApiResponse.ok(Map.of("url", url)));
     }
+
+    @PostMapping("/banner")
+    public ResponseEntity<ApiResponse<Map<String, String>>> uploadBanner(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal AccordPrincipal principal) throws IOException {
+
+        String url = uploadService.uploadBanner(principal.userId(), file);
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("url", url)));
+    }
 }

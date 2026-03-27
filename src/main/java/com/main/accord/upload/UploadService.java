@@ -243,4 +243,33 @@ public class UploadService {
 
         return url;
     }
+
+    private static final long MAX_BANNER_SIZE = 8 * 1024 * 1024L; // 8MB
+
+    private static final Set<String> ALLOWED_BANNER_TYPES = Set.of(
+            "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"
+    );
+
+    public String uploadBanner(UUID userId, MultipartFile file) throws IOException {
+        if (file.isEmpty())
+            throw new AccordException("File is empty.");
+        if (file.getSize() > MAX_BANNER_SIZE)
+            throw new AccordException("Banner must be under 8MB.");
+
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_BANNER_TYPES.contains(contentType.toLowerCase()))
+            throw new AccordException("Banner must be JPEG, PNG, GIF, or WebP.");
+
+        String ext = getExtension(file.getOriginalFilename());
+        String key = "banners/" + userId + "/" + UUID.randomUUID() + ext;
+        upload(key, file.getBytes(), contentType);
+        String url = publicUrl + "/" + bucket + "/" + key;
+
+        visualsRepository.findById(userId).ifPresent(v -> {
+            v.setDsBannerUrl(url);
+            visualsRepository.save(v);
+        });
+
+        return url;
+    }
 }
