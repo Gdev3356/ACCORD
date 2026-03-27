@@ -122,7 +122,7 @@ public class DmService {
                     if (original != null) {
 
                         decrypt(original);
-                        String plainContent = encryptionService.decrypt(original.getDsContent());
+                        String plainContent = original.getDsContent();
 
                         // Fallback to "User" if author name is missing
                         String name = authorNamesMap.getOrDefault(original.getIdAuthor(), "User");
