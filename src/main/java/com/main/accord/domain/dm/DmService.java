@@ -408,8 +408,11 @@ public class DmService {
     }
 
     private void decrypt(DmMessage msg) {
-        if (msg.getDsContent() != null) {
+        if (msg.getDsContent() == null) return;
+        try {
             msg.setDsContent(encryptionService.decrypt(msg.getDsContent()));
+        } catch (Exception e) {
+            // Message predates encryption — content is already plaintext, leave it as-is
         }
     }
 

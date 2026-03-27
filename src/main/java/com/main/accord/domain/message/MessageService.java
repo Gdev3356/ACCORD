@@ -95,7 +95,11 @@ public class MessageService {
 
         messages.forEach(m -> {
             if (m.getDsContent() != null) {
-                m.setDsContent(encryptionService.decrypt(m.getDsContent()));
+                try {
+                    m.setDsContent(encryptionService.decrypt(m.getDsContent()));
+                } catch (Exception e) {
+                    // Plaintext legacy message — leave as-is
+                }
             }
         });
         return messages;
