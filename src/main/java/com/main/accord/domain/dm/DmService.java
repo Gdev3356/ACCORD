@@ -87,28 +87,52 @@ public class DmService {
     }
 
     private void populateForwardedFrom(List<DmMessage> messages) {
+        // 1. Collect all unique IDs of forwarded messages
+        List<UUID> forwardedIds = messages.stream()
+                .map(DmMessage::getIdForwardedFrom)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (forwardedIds.isEmpty()) return;
+
+        // 2. Batch fetch original messages
+        Map<UUID, DmMessage> originalsMap = dmMessageRepository.findAllById(forwardedIds).stream()
+                .collect(java.util.stream.Collectors.toMap(DmMessage::getIdMessage, m -> m));
+
+        // 3. FIX: Use the correct ID getter for the Account entity
+        List<UUID> authorIds = originalsMap.values().stream()
+                .map(DmMessage::getIdAuthor)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<UUID, String> authorNamesMap = accountRepository.findAllById(authorIds).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        Account::getIdUser, // Changed from getIdAccount to getIdUser
+                        Account::getDsDisplayName,
+                        (existing, replacement) -> existing // Handle duplicates just in case
+                ));
+
+        // 4. Map back to DTOs
         messages.stream()
                 .filter(m -> m.getIdForwardedFrom() != null)
-                .forEach(m -> dmMessageRepository.findById(m.getIdForwardedFrom())
-                        .ifPresent(original -> {
-                            String plainContent = null;
-                            if (original.getDsContent() != null) {
-                                try {
-                                    plainContent = encryptionService.decrypt(original.getDsContent());
-                                } catch (Exception e) {
-                                    plainContent = original.getDsContent(); // legacy plaintext
-                                }
-                            }
-                            String name = original.getIdAuthor() != null
-                                    ? accountRepository.findById(original.getIdAuthor())
-                                    .map(Account::getDsDisplayName).orElse("User")
-                                    : "User";
-                            m.setForwardedFrom(new DmMessage.ForwardedFromDto(
-                                    original.getIdMessage(),
-                                    original.getIdAuthor(),
-                                    name
-                            ));
-                        }));
+                .forEach(m -> {
+                    DmMessage original = originalsMap.get(m.getIdForwardedFrom());
+                    if (original != null) {
+
+                        String plainContent = encryptionService.decrypt(original.getDsContent());
+
+                        // Fallback to "User" if author name is missing
+                        String name = authorNamesMap.getOrDefault(original.getIdAuthor(), "User");
+
+                        m.setForwardedFrom(new DmMessage.ForwardedFromDto(
+                                original.getIdMessage(),
+                                original.getIdAuthor(),
+                                name
+                        ));
+                    }
+                });
     }
 
     // Single message variant
