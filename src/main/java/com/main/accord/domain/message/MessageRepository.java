@@ -1,8 +1,11 @@
 package com.main.accord.domain.message;
 
+import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.UUID;
@@ -27,4 +30,26 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
         ORDER BY m.dtCreated DESC
     """)
     List<Message> findBeforeMessage(UUID channelId, UUID beforeId, Pageable pageable);
+
+    @Modifying
+    @Transactional
+    @Query(value = """
+    UPDATE MS_MESSAGE
+    SET    TS_CONTENT = to_tsvector('english', :plaintext)
+    WHERE  ID_MESSAGE = :id
+""", nativeQuery = true)
+    void updateSearchVector(@Param("id") UUID id,
+                            @Param("plaintext") String plaintext);
+
+    @Query(value = """
+    SELECT * FROM MS_MESSAGE
+    WHERE  ID_CHANNEL = :channelId
+      AND  ST_DELETED = FALSE
+      AND  TS_CONTENT @@ plainto_tsquery('english', :query)
+    ORDER BY ts_rank(TS_CONTENT, plainto_tsquery('english', :query)) DESC
+    LIMIT  :limit
+""", nativeQuery = true)
+    List<Message> fullTextSearch(@Param("channelId") UUID channelId,
+                                 @Param("query")     String query,
+                                 @Param("limit")     int limit);
 }

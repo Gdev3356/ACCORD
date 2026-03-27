@@ -8,6 +8,7 @@ import com.main.accord.domain.account.Visuals;
 import com.main.accord.domain.account.VisualsRepository;
 import com.main.accord.domain.notification.NotifType;
 import com.main.accord.domain.notification.NotificationService;
+import com.main.accord.security.EncryptionService;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -34,6 +35,7 @@ public class DmService {
     private final AccountRepository accountRepository; // to resolve sender name
     private final VisualsRepository visualsRepository;
     private final DmAttachmentRepository dmAttachmentRepository;
+    private final EncryptionService encryptionService;
 
     public List<Conversation> getConversations(UUID userId) {
         return conversationRepository.findAllByParticipant(userId);
@@ -89,6 +91,10 @@ public class DmService {
                 .filter(m -> m.getIdForwardedFrom() != null)
                 .forEach(m -> dmMessageRepository.findById(m.getIdForwardedFrom())
                         .ifPresent(original -> {
+                            // Decrypt the original's content for the DTO preview
+                            String plainContent = original.getDsContent() != null
+                                    ? encryptionService.decrypt(original.getDsContent())
+                                    : null;
                             String name = original.getIdAuthor() != null
                                     ? accountRepository.findById(original.getIdAuthor())
                                     .map(Account::getDsDisplayName).orElse("User")
@@ -113,23 +119,34 @@ public class DmService {
         List<DmMessage> msgs = beforeId != null
                 ? dmMessageRepository.findBeforeMessage(conversationId, beforeId, page)
                 : dmMessageRepository.findByConversation(conversationId, page);
-        populateForwardedFrom(msgs);   // ← add
+
+        decryptAll(msgs);
+        populateForwardedFrom(msgs);
         return msgs;
     }
 
     @Transactional
-    public DmMessage sendMessage(UUID conversationId, UUID authorId, String content, UUID replyToId, UUID forwardAttachmentFrom) {
+    public DmMessage sendMessage(UUID conversationId, UUID authorId,
+                                 String content, UUID replyToId, UUID forwardAttachmentFrom) {
         assertParticipant(conversationId, authorId);
+
+        // Encrypt before persisting
+        String encryptedContent = content != null ? encryptionService.encrypt(content) : null;
 
         DmMessage saved = dmMessageRepository.save(
                 DmMessage.builder()
                         .idConversation(conversationId)
                         .idAuthor(authorId)
-                        .dsContent(content)
+                        .dsContent(encryptedContent)
                         .idReplyTo(replyToId)
-                        .idForwardedFrom(forwardAttachmentFrom) // ← add this
+                        .idForwardedFrom(forwardAttachmentFrom)
                         .build()
         );
+
+        // Write plaintext into the search vector — content is never stored as plaintext
+        if (content != null && !content.isBlank()) {
+            dmMessageRepository.updateSearchVector(saved.getIdMessage(), content);
+        }
 
         // ── Clone attachments from forwarded message ───────────────────────
         if (forwardAttachmentFrom != null) {
@@ -151,14 +168,14 @@ public class DmService {
             }
         }
 
-        populateForwardedFrom(saved);
+        // Broadcast with PLAIN text — never send ciphertext to clients
+        DmMessage broadcast = cloneWithDecryptedContent(saved, content);
         chatHandler.broadcastToDm(conversationId,
-                Map.of("type", "DM_MESSAGE_CREATE", "data", saved));
+                Map.of("type", "DM_MESSAGE_CREATE", "data", broadcast));
 
-        // Resolve sender name once
+        // Notifications use plaintext content
         String senderName = accountRepository.findById(authorId)
-                .map(a -> a.getDsDisplayName())
-                .orElse("Someone");
+                .map(Account::getDsDisplayName).orElse("Someone");
 
         // ── Reply notification ─────────────────────────────────────────────
         if (replyToId != null) {
@@ -195,7 +212,7 @@ public class DmService {
                     }));
         }
 
-        return saved;
+        return broadcast;
     }
 
     public List<Participant> getParticipants(UUID conversationId, UUID requesterId) {
@@ -218,9 +235,12 @@ public class DmService {
     public List<DmMessage> searchMessages(UUID conversationId, UUID requesterId,
                                           String query, int limit) {
         assertParticipant(conversationId, requesterId);
-        List<DmMessage> msgs =  dmMessageRepository.searchContent(
-                conversationId, query.toLowerCase(), PageRequest.of(0, Math.min(limit, 100))
+
+        List<DmMessage> msgs = dmMessageRepository.fullTextSearch(
+                conversationId, query, Math.min(limit, 100)
         );
+
+        decryptAll(msgs);            // decrypt dsContent before returning
         populateForwardedFrom(msgs);
         return msgs;
     }
@@ -230,26 +250,29 @@ public class DmService {
         DmMessage msg = dmMessageRepository.findById(messageId)
                 .orElseThrow(() -> new NotFoundException("Message not found."));
 
-        if (!msg.getIdAuthor().equals(editorId)) {
+        if (!msg.getIdAuthor().equals(editorId))
             throw new ForbiddenException("You can only edit your own messages.");
-        }
 
         if (msg.getDtCreated() != null &&
-                msg.getDtCreated().isBefore(OffsetDateTime.now().minusHours(3))) {
+                msg.getDtCreated().isBefore(OffsetDateTime.now().minusHours(3)))
             throw new ForbiddenException("Messages can only be edited within 3 hours of sending.");
-        }
 
         assertParticipant(msg.getIdConversation(), editorId);
 
-        msg.setDsContent(newContent);
+        msg.setDsContent(encryptionService.encrypt(newContent));   // ← encrypt
         msg.setStEdited(true);
-        msg.setDtEdited(java.time.OffsetDateTime.now());
+        msg.setDtEdited(OffsetDateTime.now());
         DmMessage saved = dmMessageRepository.save(msg);
 
-        chatHandler.broadcastToDm(msg.getIdConversation(),
-                Map.of("type", "DM_MESSAGE_EDIT", "data", saved));
+        if (newContent != null && !newContent.isBlank()) {
+            dmMessageRepository.updateSearchVector(messageId, newContent);
+        }
 
-        return saved;
+        DmMessage broadcast = cloneWithDecryptedContent(saved, newContent);
+        chatHandler.broadcastToDm(msg.getIdConversation(),
+                Map.of("type", "DM_MESSAGE_EDIT", "data", broadcast));
+
+        return broadcast;
     }
 
     @Transactional
@@ -286,6 +309,7 @@ public class DmService {
     public DmMessage getMessage(UUID messageId, UUID requesterId) {
         DmMessage msg = dmMessageRepository.findById(messageId)
                 .orElseThrow(() -> new NotFoundException("Message not found."));
+        decrypt(msg);
         populateForwardedFrom(msg);
         assertParticipant(msg.getIdConversation(), requesterId);
         return msg;
@@ -364,5 +388,32 @@ public class DmService {
 
         chatHandler.broadcastToDm(msg.getIdConversation(),
                 Map.of("type", "DM_MESSAGE_DELETE", "data", Map.of("messageId", messageId)));
+    }
+
+    private DmMessage cloneWithDecryptedContent(DmMessage source, String plainContent) {
+        DmMessage copy = new DmMessage();
+        copy.setIdMessage(source.getIdMessage());
+        copy.setIdConversation(source.getIdConversation());
+        copy.setIdAuthor(source.getIdAuthor());
+        copy.setIdReplyTo(source.getIdReplyTo());
+        copy.setIdForwardedFrom(source.getIdForwardedFrom());
+        copy.setDsContent(plainContent);
+        copy.setStEdited(source.getStEdited());
+        copy.setStDeleted(source.getStDeleted());
+        copy.setDtCreated(source.getDtCreated());
+        copy.setDtEdited(source.getDtEdited());
+        copy.setAttachments(source.getAttachments());
+        copy.setForwardedFrom(source.getForwardedFrom());
+        return copy;
+    }
+
+    private void decrypt(DmMessage msg) {
+        if (msg.getDsContent() != null) {
+            msg.setDsContent(encryptionService.decrypt(msg.getDsContent()));
+        }
+    }
+
+    private void decryptAll(List<DmMessage> msgs) {
+        msgs.forEach(this::decrypt);
     }
 }

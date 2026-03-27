@@ -16,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -64,6 +63,8 @@ public class MessageService {
                         .dsContent(encryptionService.encrypt(mentions.sanitizedContent()))
                         .build()
         );
+
+        messageRepository.updateSearchVector(saved.getIdMessage(), mentions.sanitizedContent());
 
         // Broadcast the message — send decrypted content over WS, not the ciphertext
         Message broadcast = cloneWithDecryptedContent(saved, mentions.sanitizedContent());
