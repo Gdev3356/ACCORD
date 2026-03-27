@@ -91,10 +91,14 @@ public class DmService {
                 .filter(m -> m.getIdForwardedFrom() != null)
                 .forEach(m -> dmMessageRepository.findById(m.getIdForwardedFrom())
                         .ifPresent(original -> {
-                            // Decrypt the original's content for the DTO preview
-                            String plainContent = original.getDsContent() != null
-                                    ? encryptionService.decrypt(original.getDsContent())
-                                    : null;
+                            String plainContent = null;
+                            if (original.getDsContent() != null) {
+                                try {
+                                    plainContent = encryptionService.decrypt(original.getDsContent());
+                                } catch (Exception e) {
+                                    plainContent = original.getDsContent(); // legacy plaintext
+                                }
+                            }
                             String name = original.getIdAuthor() != null
                                     ? accountRepository.findById(original.getIdAuthor())
                                     .map(Account::getDsDisplayName).orElse("User")
@@ -253,27 +257,33 @@ public class DmService {
         if (!msg.getIdAuthor().equals(editorId))
             throw new ForbiddenException("You can only edit your own messages.");
 
-        if (msg.getDtCreated() != null &&
-                msg.getDtCreated().isBefore(OffsetDateTime.now().minusHours(3)))
-            throw new ForbiddenException("Messages can only be edited within 3 hours of sending.");
-
+        // Security check: ensure they are still in the room
         assertParticipant(msg.getIdConversation(), editorId);
 
-        msg.setDsContent(encryptionService.encrypt(newContent));   // ← encrypt
+        if (msg.getDtCreated() != null &&
+                msg.getDtCreated().isBefore(OffsetDateTime.now().minusHours(3)))
+            throw new ForbiddenException("Messages can only be edited within 3 hours.");
+
+        // Encrypt the new content for storage
+        String encrypted = newContent != null ? encryptionService.encrypt(newContent) : null;
+        msg.setDsContent(encrypted);
         msg.setStEdited(true);
         msg.setDtEdited(OffsetDateTime.now());
-        DmMessage saved = dmMessageRepository.save(msg);
+
+        dmMessageRepository.save(msg);
 
         if (newContent != null && !newContent.isBlank()) {
             dmMessageRepository.updateSearchVector(messageId, newContent);
         }
 
-        DmMessage broadcast = cloneWithDecryptedContent(saved, newContent);
+        // Use the helper to ensure consistent decryption/fallback for the broadcast
+        DmMessage broadcast = cloneWithDecryptedContent(msg, newContent);
         chatHandler.broadcastToDm(msg.getIdConversation(),
                 Map.of("type", "DM_MESSAGE_EDIT", "data", broadcast));
 
         return broadcast;
     }
+
 
     @Transactional
     public void markRead(UUID conversationId, UUID userId, UUID lastMessageId) {
