@@ -1,6 +1,5 @@
 package com.main.accord.security;
 
-import com.main.accord.security.EncryptionMigrationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -13,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
-public class AdminController {
+public class AdminControllerMigration {
 
     private final EncryptionMigrationService migrationService;
 
