@@ -84,13 +84,37 @@ public class DmService {
         return convo;
     }
 
+    private void populateForwardedFrom(List<DmMessage> messages) {
+        messages.stream()
+                .filter(m -> m.getIdForwardedFrom() != null)
+                .forEach(m -> dmMessageRepository.findById(m.getIdForwardedFrom())
+                        .ifPresent(original -> {
+                            String name = original.getIdAuthor() != null
+                                    ? accountRepository.findById(original.getIdAuthor())
+                                    .map(Account::getDsDisplayName).orElse("User")
+                                    : "User";
+                            m.setForwardedFrom(new DmMessage.ForwardedFromDto(
+                                    original.getIdMessage(),
+                                    original.getIdAuthor(),
+                                    name
+                            ));
+                        }));
+    }
+
+    // Single message variant
+    private void populateForwardedFrom(DmMessage msg) {
+        populateForwardedFrom(List.of(msg));
+    }
+
     public List<DmMessage> getMessages(UUID conversationId, UUID requesterId,
                                        UUID beforeId, int limit) {
         assertParticipant(conversationId, requesterId);
         PageRequest page = PageRequest.of(0, Math.min(limit, 100));
-        return beforeId != null
+        List<DmMessage> msgs = beforeId != null
                 ? dmMessageRepository.findBeforeMessage(conversationId, beforeId, page)
                 : dmMessageRepository.findByConversation(conversationId, page);
+        populateForwardedFrom(msgs);   // ← add
+        return msgs;
     }
 
     @Transactional
@@ -103,6 +127,7 @@ public class DmService {
                         .idAuthor(authorId)
                         .dsContent(content)
                         .idReplyTo(replyToId)
+                        .idForwardedFrom(forwardAttachmentFrom) // ← add this
                         .build()
         );
 
@@ -126,6 +151,7 @@ public class DmService {
             }
         }
 
+        populateForwardedFrom(saved);
         chatHandler.broadcastToDm(conversationId,
                 Map.of("type", "DM_MESSAGE_CREATE", "data", saved));
 
@@ -192,9 +218,11 @@ public class DmService {
     public List<DmMessage> searchMessages(UUID conversationId, UUID requesterId,
                                           String query, int limit) {
         assertParticipant(conversationId, requesterId);
-        return dmMessageRepository.searchContent(
+        List<DmMessage> msgs =  dmMessageRepository.searchContent(
                 conversationId, query.toLowerCase(), PageRequest.of(0, Math.min(limit, 100))
         );
+        populateForwardedFrom(msgs);
+        return msgs;
     }
 
     @Transactional
@@ -258,6 +286,7 @@ public class DmService {
     public DmMessage getMessage(UUID messageId, UUID requesterId) {
         DmMessage msg = dmMessageRepository.findById(messageId)
                 .orElseThrow(() -> new NotFoundException("Message not found."));
+        populateForwardedFrom(msg);
         assertParticipant(msg.getIdConversation(), requesterId);
         return msg;
     }

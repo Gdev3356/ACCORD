@@ -45,4 +45,19 @@ public class DmMessage {
 
     @Column(name = "DT_EDITED")
     private OffsetDateTime dtEdited;
+
+    @Column(name = "ID_FORWARDED_FROM")
+    private UUID idForwardedFrom;
+
+    // Transient — populated at query time, serialized to frontend
+    @Transient
+    private ForwardedFromDto forwardedFrom;
+
+    // Inner DTO — Jackson will serialize this as the `forwardedFrom` object
+    @Data @AllArgsConstructor @NoArgsConstructor
+    public static class ForwardedFromDto {
+        private UUID   idMessage;
+        private UUID   idUser;
+        private String dsDisplayName;
+    }
 }
