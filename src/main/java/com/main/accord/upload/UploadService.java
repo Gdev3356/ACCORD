@@ -195,6 +195,24 @@ public class UploadService {
         });
     }
 
+    public String uploadAttachment(UUID messageId, MultipartFile file) throws IOException {
+        if (file.isEmpty())
+            throw new AccordException("File is empty.");
+        if (file.getSize() > MAX_ATTACHMENT_SIZE)
+            throw new AccordException("Attachment must be under 25MB.");
+
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_ATTACHMENT_TYPES.contains(contentType.toLowerCase()))
+            throw new AccordException("File type not allowed.");
+
+        String ext = getExtension(file.getOriginalFilename());
+        String key = "attachments/" + messageId + "/" + UUID.randomUUID() + ext;
+
+        // Uses the streaming overload — same fix as uploadDmAttachment
+        upload(key, file, contentType);
+        return publicUrl + "/" + bucket + "/" + key;
+    }
+
     public String uploadDmAttachment(UUID messageId, MultipartFile file) throws IOException {
         if (file.isEmpty())
             throw new AccordException("File is empty.");
