@@ -89,4 +89,20 @@ public interface DmMessageRepository extends JpaRepository<DmMessage, UUID> {
     List<DmMessage> fullTextSearch(@Param("convId") UUID convId,
                                    @Param("query")  String query,
                                    @Param("limit")  int limit);
+
+    @Query(value = """
+    SELECT m.id_conversation, COUNT(m.id_message)
+    FROM dm_message m
+    LEFT JOIN dm_read_state r
+        ON r.id_conversation = m.id_conversation
+        AND r.id_user = :userId
+    WHERE m.id_conversation IN :conversationIds
+      AND m.st_deleted = false
+      AND (r.dt_last_read IS NULL OR m.dt_created > r.dt_last_read)
+    GROUP BY m.id_conversation
+""", nativeQuery = true)
+    List<Object[]> countUnreadPerConversation(
+            @Param("userId") UUID userId,
+            @Param("conversationIds") List<UUID> conversationIds
+    );
 }

@@ -42,4 +42,15 @@ public interface FriendshipRepository extends JpaRepository<Friendship, Friendsh
            OR (f.idUserA = :userB AND f.idUserB = :userA)
     """)
         Optional<Friendship> findBetween(@Param("userA") UUID userA, @Param("userB") UUID userB);
+
+    @Query("""
+    SELECT f FROM Friendship f
+    WHERE f.stStatus = com.main.accord.domain.dm.FriendStatus.accepted
+      AND ((f.idUserA = :userId AND f.idUserB IN :otherIds)
+        OR (f.idUserB = :userId AND f.idUserA IN :otherIds))
+""")
+    List<Friendship> findAcceptedWithAny(
+            @Param("userId") UUID userId,
+            @Param("otherIds") List<UUID> otherIds
+    );
 }

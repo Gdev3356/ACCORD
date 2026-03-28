@@ -33,4 +33,15 @@ public interface ParticipantRepository extends JpaRepository<Participant, Partic
             @Param("convId") UUID convId,
             @Param("userId") UUID userId
     );
+
+    @Query("""
+    SELECT p FROM DmParticipant p
+    WHERE p.idConversation IN :conversationIds
+      AND p.idUser <> :userId
+      AND p.dtLeft IS NULL
+""")
+    List<Participant> findOtherParticipantsIn(
+            @Param("conversationIds") List<UUID> conversationIds,
+            @Param("userId") UUID userId
+    );
 }

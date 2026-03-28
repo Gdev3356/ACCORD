@@ -2,6 +2,8 @@ package com.main.accord.domain.dm;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,4 +24,14 @@ public interface DmReadStateRepository extends JpaRepository<DmReadState, DmRead
         GROUP BY r.idConversation
     """)
     List<UUID> findConversationsWithUnread(UUID userId);
+
+    @Query("""
+    SELECT r FROM DmReadState r
+    WHERE r.idUser = :userId
+      AND r.idConversation IN :conversationIds
+""")
+    List<DmReadState> findAllByUserAndConversations(
+            @Param("userId") UUID userId,
+            @Param("conversationIds") List<UUID> conversationIds
+    );
 }

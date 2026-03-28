@@ -352,10 +352,49 @@ public class DmService {
 
 
     public List<ConversationSummaryDto> getConversationSummaries(UUID userId) {
-        List<Conversation> convos = conversationRepository.findAllByParticipant(userId); // ← fix 1
+        List<Conversation> convos = conversationRepository.findAllByParticipant(userId);
 
+        List<UUID> directConvIds = convos.stream()
+                .filter(c -> !Boolean.TRUE.equals(c.getStGroup()))
+                .map(Conversation::getIdConversation)
+                .toList();
+
+        // ── 1 query: all other participant IDs ────────────────────────────────
+        Map<UUID, UUID> convToOther = participantRepository
+                .findOtherParticipantsIn(directConvIds, userId).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        Participant::getIdConversation,
+                        Participant::getIdUser,
+                        (a, b) -> a
+                ));
+
+        List<UUID> otherIds = convToOther.values().stream().distinct().toList();
+
+        // ── 1 query each: accounts, visuals, friendships ──────────────────────
+        Map<UUID, Account> accounts = accountRepository.findAllById(otherIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Account::getIdUser, a -> a));
+
+        Map<UUID, Visuals> visualsMap = visualsRepository.findAllById(otherIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Visuals::getIdUser, v -> v));
+
+        java.util.Set<UUID> friendIds = (otherIds.isEmpty()
+                ? java.util.List.<Friendship>of()
+                : friendshipRepository.findAcceptedWithAny(userId, otherIds)).stream()
+                .map(f -> f.getIdUserA().equals(userId) ? f.getIdUserB() : f.getIdUserA())
+                .collect(java.util.stream.Collectors.toSet());
+
+        // ── 1 query: unread counts ────────────────────────────────────────────
+        Map<UUID, Long> unreadCounts = (directConvIds.isEmpty()
+                ? java.util.List.<Object[]>of()
+                : dmMessageRepository.countUnreadPerConversation(userId, directConvIds)).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> UUID.fromString(row[0].toString()),
+                        row -> ((Number) row[1]).longValue()
+                ));
+
+        // ── Assemble ──────────────────────────────────────────────────────────
         return convos.stream().map(c -> {
-            if (Boolean.TRUE.equals(c.getStGroup())) { // ← fix 2
+            if (Boolean.TRUE.equals(c.getStGroup())) {
                 return ConversationSummaryDto.builder()
                         .idConversation(c.getIdConversation())
                         .stGroup(true)
@@ -363,7 +402,7 @@ public class DmService {
                         .build();
             }
 
-            UUID otherId = participantRepository.findOtherParticipant(c.getIdConversation(), userId);
+            UUID otherId = convToOther.get(c.getIdConversation());
             if (otherId == null) {
                 return ConversationSummaryDto.builder()
                         .idConversation(c.getIdConversation())
@@ -371,38 +410,18 @@ public class DmService {
                         .build();
             }
 
-            Account other   = accountRepository.findById(otherId).orElse(null);
-            Visuals visuals = visualsRepository.findById(otherId).orElse(null);
-
-            boolean isFriend = friendshipRepository.findBetween(userId, otherId)
-                    .map(f -> f.getStStatus() == FriendStatus.accepted)
-                    .orElse(false);
-
-            DmReadState readState = dmReadStateRepository
-                    .findByIdConversationAndIdUser(c.getIdConversation(), userId)
-                    .orElse(null);
-
-            int unread = 0;
-            if (readState != null && readState.getDtLastRead() != null) {
-                unread = (int) dmMessageRepository.countUnreadSince(
-                        c.getIdConversation(), readState.getDtLastRead()
-                );
-            } else if (readState == null) {
-                // Never opened — count everything
-                unread = (int) dmMessageRepository.countUnreadSince(
-                        c.getIdConversation(), OffsetDateTime.parse("1970-01-01T00:00:00Z")
-                );
-            }
+            Account other  = accounts.get(otherId);
+            Visuals vis    = visualsMap.get(otherId);
 
             return ConversationSummaryDto.builder()
                     .idConversation(c.getIdConversation())
                     .stGroup(false)
                     .otherId(otherId)
                     .otherDisplayName(other != null ? other.getDsDisplayName() : "User")
-                    .otherPfpUrl(visuals != null ? visuals.getDsPfpUrl() : null)
+                    .otherPfpUrl(vis != null ? vis.getDsPfpUrl() : null)
                     .otherPresence(other != null ? other.getStPresence().name() : "offline")
-                    .isFriend(isFriend)
-                    .nrUnread(unread)
+                    .isFriend(friendIds.contains(otherId))
+                    .nrUnread(unreadCounts.getOrDefault(c.getIdConversation(), 0L).intValue())
                     .build();
         }).toList();
     }
