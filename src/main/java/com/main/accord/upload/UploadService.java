@@ -56,6 +56,13 @@ public class UploadService {
             "application/zip"
     );
 
+    // ── Banner ─────────────────────────────────────────────────────────────
+    private static final long MAX_BANNER_SIZE = 8 * 1024 * 1024L; // 8MB
+
+    private static final Set<String> ALLOWED_BANNER_TYPES = Set.of(
+            "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"
+    );
+
     private static final long MAX_PFP_SIZE        = 5  * 1024 * 1024L; // 5MB
     private static final long MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024L; // 25MB
 
@@ -87,32 +94,28 @@ public class UploadService {
         return url;
     }
 
-    public String uploadAttachment(UUID messageId, MultipartFile file) throws IOException {
-        // ── Validate ──────────────────────────────────────────────────────────
-        if (file.isEmpty()) {
-            throw new AccordException("File is empty.");
-        }
-        if (file.getSize() > MAX_ATTACHMENT_SIZE) {
-            throw new AccordException("Attachment must be under 25MB.");
-        }
-        String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_ATTACHMENT_TYPES.contains(contentType.toLowerCase())) {
-            throw new AccordException("File type not allowed.");
-        }
-
-        // ── Upload ────────────────────────────────────────────────────────────
-        String ext = getExtension(file.getOriginalFilename());
-        String key = "attachments/" + messageId + "/" + UUID.randomUUID() + ext;
-        upload(key, file.getBytes(), contentType);
-        return publicUrl + "/" + bucket + "/" + key;
+    // Accept a MultipartFile directly to avoid loading into memory twice
+    private void upload(String key, MultipartFile file, String contentType) throws IOException {
+        s3Client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(key)
+                        .contentType(contentType)
+                        .contentLength(file.getSize())
+                        .cacheControl("public, max-age=31536000, immutable")
+                        .build(),
+                RequestBody.fromInputStream(file.getInputStream(), file.getSize())
+        );
     }
 
+    // Keep the byte[] overload for the resize path (pfp/emoji — already in memory)
     private void upload(String key, byte[] data, String contentType) {
         s3Client.putObject(
                 PutObjectRequest.builder()
                         .bucket(bucket)
                         .key(key)
                         .contentType(contentType)
+                        .cacheControl("public, max-age=31536000, immutable")
                         .build(),
                 RequestBody.fromBytes(data)
         );
@@ -204,24 +207,20 @@ public class UploadService {
 
         String ext = getExtension(file.getOriginalFilename());
         String key = "dm-attachments/" + messageId + "/" + UUID.randomUUID() + ext;
-        upload(key, file.getBytes(), contentType);
-        String url = publicUrl + "/" + bucket + "/" + key;
 
-        // ── Resolve image dimensions if applicable ────────────────────────────────
+        // Resolve dimensions before streaming (reads once for images)
         Integer width  = null;
         Integer height = null;
         if (contentType.startsWith("image/")) {
             try {
                 BufferedImage img = ImageIO.read(file.getInputStream());
-                if (img != null) {
-                    width  = img.getWidth();
-                    height = img.getHeight();
-                }
-            } catch (IOException ignored) {
-                // Non-fatal — dimensions stay null; frontend falls back gracefully
-            }
+                if (img != null) { width = img.getWidth(); height = img.getHeight(); }
+            } catch (IOException ignored) {}
         }
-        // ─────────────────────────────────────────────────────────────────────────
+
+        // Stream directly — no full copy into heap
+        upload(key, file, contentType);
+        String url = publicUrl + "/" + bucket + "/" + key;
 
         dmAttachmentRepository.save(DmAttachment.builder()
                 .idMessage(messageId)
@@ -233,7 +232,6 @@ public class UploadService {
                 .nrHeight(height)
                 .build());
 
-// Broadcast the updated message so all participants see the attachment immediately
         dmMessageRepository.findById(messageId).ifPresent(msg ->
                 chatHandler.broadcastToDm(
                         msg.getIdConversation(),
@@ -243,12 +241,6 @@ public class UploadService {
 
         return url;
     }
-
-    private static final long MAX_BANNER_SIZE = 8 * 1024 * 1024L; // 8MB
-
-    private static final Set<String> ALLOWED_BANNER_TYPES = Set.of(
-            "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"
-    );
 
     public String uploadBanner(UUID userId, MultipartFile file) throws IOException {
         if (file.isEmpty())
@@ -262,7 +254,8 @@ public class UploadService {
 
         String ext = getExtension(file.getOriginalFilename());
         String key = "banners/" + userId + "/" + UUID.randomUUID() + ext;
-        upload(key, file.getBytes(), contentType);
+
+        upload(key, file, contentType);
         String url = publicUrl + "/" + bucket + "/" + key;
 
         visualsRepository.findById(userId).ifPresent(v -> {
