@@ -454,4 +454,18 @@ public class DmService {
     private void decryptAll(List<DmMessage> msgs) {
         msgs.forEach(this::decrypt);
     }
+
+    public void broadcastAttachmentUpdate(UUID messageId) {
+        dmMessageRepository.findById(messageId).ifPresent(msg -> {
+            List<DmAttachment> attachments = dmAttachmentRepository.findByIdMessage(messageId);
+            msg.setAttachments(attachments);
+            // Reuse the existing decrypt path — identical to getMessages/getMessage
+            decrypt(msg);
+            populateForwardedFrom(msg);
+            chatHandler.broadcastToDm(
+                    msg.getIdConversation(),
+                    Map.of("type", "DM_MESSAGE_EDIT", "data", msg)
+            );
+        });
+    }
 }

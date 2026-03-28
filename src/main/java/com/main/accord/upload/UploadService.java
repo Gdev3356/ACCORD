@@ -5,6 +5,7 @@ import com.main.accord.domain.account.VisualsRepository;
 import com.main.accord.domain.dm.DmAttachment;
 import com.main.accord.domain.dm.DmAttachmentRepository;
 import com.main.accord.domain.dm.DmMessageRepository;
+import com.main.accord.domain.dm.DmService;
 import com.main.accord.domain.server.SvEmoji;
 import com.main.accord.domain.server.SvEmojiRepository;
 import com.main.accord.security.EncryptionService;
@@ -37,6 +38,7 @@ public class UploadService {
     private final ChatHandler chatHandler;
     private final DmMessageRepository dmMessageRepository;
     private final EncryptionService encryptionService;
+    private final DmService dmService;
 
     @Value("${supabase.storage.bucket}")
     private String bucket;
@@ -253,25 +255,7 @@ public class UploadService {
                 .nrHeight(height)
                 .build());
 
-        dmMessageRepository.findById(messageId).ifPresent(msg -> {
-
-            //  Populate attachments so the broadcast includes them
-            List<DmAttachment> attachments = dmAttachmentRepository.findByIdMessage(messageId);
-            msg.setAttachments(attachments);
-
-            // Decrypt content before sending to clients — never send ciphertext over WS
-            try {
-                if (msg.getDsContent() != null)
-                    msg.setDsContent(encryptionService.decrypt(msg.getDsContent()));
-            } catch (Exception ignored) {
-                // Pre-encryption message — content already plaintext, leave as-is
-            }
-
-            chatHandler.broadcastToDm(
-                    msg.getIdConversation(),
-                    Map.of("type", "DM_MESSAGE_EDIT", "data", msg)
-            );
-        });
+        dmService.broadcastAttachmentUpdate(messageId);
 
         return url;
     }
