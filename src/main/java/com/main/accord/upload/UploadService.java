@@ -7,6 +7,7 @@ import com.main.accord.domain.dm.DmAttachmentRepository;
 import com.main.accord.domain.dm.DmMessageRepository;
 import com.main.accord.domain.server.SvEmoji;
 import com.main.accord.domain.server.SvEmojiRepository;
+import com.main.accord.security.EncryptionService;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +22,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -34,6 +36,7 @@ public class UploadService {
     private final DmAttachmentRepository dmAttachmentRepository;
     private final ChatHandler chatHandler;
     private final DmMessageRepository dmMessageRepository;
+    private final EncryptionService encryptionService;
 
     @Value("${supabase.storage.bucket}")
     private String bucket;
@@ -250,12 +253,25 @@ public class UploadService {
                 .nrHeight(height)
                 .build());
 
-        dmMessageRepository.findById(messageId).ifPresent(msg ->
-                chatHandler.broadcastToDm(
-                        msg.getIdConversation(),
-                        Map.of("type", "DM_MESSAGE_EDIT", "data", msg)
-                )
-        );
+        dmMessageRepository.findById(messageId).ifPresent(msg -> {
+
+            //  Populate attachments so the broadcast includes them
+            List<DmAttachment> attachments = dmAttachmentRepository.findByIdMessage(messageId);
+            msg.setAttachments(attachments);
+
+            // Decrypt content before sending to clients — never send ciphertext over WS
+            try {
+                if (msg.getDsContent() != null)
+                    msg.setDsContent(encryptionService.decrypt(msg.getDsContent()));
+            } catch (Exception ignored) {
+                // Pre-encryption message — content already plaintext, leave as-is
+            }
+
+            chatHandler.broadcastToDm(
+                    msg.getIdConversation(),
+                    Map.of("type", "DM_MESSAGE_EDIT", "data", msg)
+            );
+        });
 
         return url;
     }
