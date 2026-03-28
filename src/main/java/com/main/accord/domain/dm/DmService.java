@@ -1,5 +1,6 @@
 package com.main.accord.domain.dm;
 
+import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
 import com.main.accord.domain.account.Account;
@@ -486,5 +487,117 @@ public class DmService {
                     Map.of("type", "DM_MESSAGE_EDIT", "data", msg)
             );
         });
+    }
+
+    @Transactional
+    public void addMember(UUID conversationId, UUID requesterId, UUID targetId) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found."));
+        if (!Boolean.TRUE.equals(conv.getStGroup()))
+            throw new ForbiddenException("This is not a group conversation.");
+        if (!conv.getIdOwner().equals(requesterId))
+            throw new ForbiddenException("Only the group owner can add members.");
+
+        long current = participantRepository
+                .findByIdConversationAndDtLeftIsNull(conversationId).size();
+        if (current >= 10)
+            throw new AccordException("Groups are limited to 10 members.");
+
+        boolean alreadyIn = participantRepository
+                .findByIdConversationAndDtLeftIsNull(conversationId)
+                .stream().anyMatch(p -> p.getIdUser().equals(targetId));
+        if (alreadyIn)
+            throw new AccordException("User is already in this group.");
+
+        participantRepository.save(Participant.builder()
+                .idConversation(conversationId)
+                .idUser(targetId)
+                .build());
+
+        chatHandler.broadcastToDm(conversationId, Map.of(
+                "type", "GROUP_MEMBER_ADD",
+                "data", Map.of("conversationId", conversationId, "userId", targetId)
+        ));
+    }
+
+    @Transactional
+    public void removeMember(UUID conversationId, UUID requesterId, UUID targetId) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found."));
+        if (!Boolean.TRUE.equals(conv.getStGroup()))
+            throw new ForbiddenException("This is not a group conversation.");
+        if (!conv.getIdOwner().equals(requesterId))
+            throw new ForbiddenException("Only the group owner can remove members.");
+        if (requesterId.equals(targetId))
+            throw new ForbiddenException("Use the leave endpoint to leave a group.");
+
+        participantRepository.findByIdConversationAndDtLeftIsNull(conversationId)
+                .stream()
+                .filter(p -> p.getIdUser().equals(targetId))
+                .findFirst()
+                .ifPresent(p -> {
+                    p.setDtLeft(OffsetDateTime.now());
+                    participantRepository.save(p);
+                });
+
+        chatHandler.broadcastToDm(conversationId, Map.of(
+                "type", "GROUP_MEMBER_REMOVE",
+                "data", Map.of("conversationId", conversationId, "userId", targetId)
+        ));
+    }
+
+    @Transactional
+    public void leaveGroup(UUID conversationId, UUID userId) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found."));
+        if (!Boolean.TRUE.equals(conv.getStGroup()))
+            throw new ForbiddenException("This is not a group conversation.");
+
+        assertParticipant(conversationId, userId);
+
+        participantRepository.findByIdConversationAndDtLeftIsNull(conversationId)
+                .stream()
+                .filter(p -> p.getIdUser().equals(userId))
+                .findFirst()
+                .ifPresent(p -> {
+                    p.setDtLeft(OffsetDateTime.now());
+                    participantRepository.save(p);
+                });
+
+        // If owner left, transfer to the next member or leave ownerless
+        if (conv.getIdOwner().equals(userId)) {
+            participantRepository.findByIdConversationAndDtLeftIsNull(conversationId)
+                    .stream()
+                    .map(Participant::getIdUser)
+                    .findFirst()
+                    .ifPresent(newOwner -> {
+                        conv.setIdOwner(newOwner);
+                        conversationRepository.save(conv);
+                    });
+        }
+
+        chatHandler.broadcastToDm(conversationId, Map.of(
+                "type", "GROUP_MEMBER_REMOVE",
+                "data", Map.of("conversationId", conversationId, "userId", userId)
+        ));
+    }
+
+    @Transactional
+    public Conversation renameGroup(UUID conversationId, UUID requesterId, String name) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found."));
+        if (!Boolean.TRUE.equals(conv.getStGroup()))
+            throw new ForbiddenException("This is not a group conversation.");
+        if (!conv.getIdOwner().equals(requesterId))
+            throw new ForbiddenException("Only the group owner can rename the group.");
+
+        conv.setDsName(name);
+        conversationRepository.save(conv);
+
+        chatHandler.broadcastToDm(conversationId, Map.of(
+                "type", "GROUP_RENAMED",
+                "data", Map.of("conversationId", conversationId, "dsName", name)
+        ));
+        return conv;
     }
 }

@@ -165,4 +165,43 @@ public class DmController {
         dmService.deleteMessage(messageId, principal.userId());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
+
+    public record AddMemberRequest(UUID userId) {}
+    public record RenameGroupRequest(String name) {}
+
+    @PostMapping("/group/{conversationId}/members")
+    public ResponseEntity<ApiResponse<Void>> addMember(
+            @PathVariable UUID conversationId,
+            @RequestBody AddMemberRequest req,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        dmService.addMember(conversationId, principal.userId(), req.userId());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @DeleteMapping("/group/{conversationId}/members/{userId}")
+    public ResponseEntity<ApiResponse<Void>> removeMember(
+            @PathVariable UUID conversationId,
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        dmService.removeMember(conversationId, principal.userId(), userId);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @DeleteMapping("/group/{conversationId}/leave")
+    public ResponseEntity<ApiResponse<Void>> leaveGroup(
+            @PathVariable UUID conversationId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        dmService.leaveGroup(conversationId, principal.userId());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @PatchMapping("/group/{conversationId}")
+    public ResponseEntity<ApiResponse<Conversation>> renameGroup(
+            @PathVariable UUID conversationId,
+            @RequestBody RenameGroupRequest req,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                dmService.renameGroup(conversationId, principal.userId(), req.name())
+        ));
+    }
 }
