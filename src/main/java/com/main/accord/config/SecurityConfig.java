@@ -41,7 +41,7 @@ public class SecurityConfig {
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()          // login, register, refresh
                         .requestMatchers(HttpMethod.GET, "/api/v1/invites/*").permitAll()
-                        .requestMatchers("/api/admin/**").permitAll()
+                        //.requestMatchers("/api/admin/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .anyRequest().authenticated()
                 )
