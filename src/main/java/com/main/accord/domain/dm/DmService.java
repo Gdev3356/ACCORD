@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -152,6 +153,13 @@ public class DmService {
 
         decryptAll(msgs);
         populateForwardedFrom(msgs);
+
+        // Touch last-accessed for all attachments on this page in one UPDATE
+        List<UUID> ids = msgs.stream().map(DmMessage::getIdMessage).toList();
+        if (!ids.isEmpty()) {
+            dmAttachmentRepository.touchByMessageIds(ids, ZonedDateTime.now());
+        }
+
         return msgs;
     }
 

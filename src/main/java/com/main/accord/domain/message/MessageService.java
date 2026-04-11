@@ -15,6 +15,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,6 +32,7 @@ public class MessageService {
     private final MentionParser         mentionParser;
     private final NotificationService   notificationService;
     private final BanService            banService;
+    private final MsAttachmentRepository msAttachmentRepository;
 
     @Transactional
     public Message sendMessage(UUID channelId, UUID authorId, String content) {
@@ -102,6 +104,12 @@ public class MessageService {
                 }
             }
         });
+
+        List<UUID> ids = messages.stream().map(Message::getIdMessage).toList();
+        if (!ids.isEmpty()) {
+            msAttachmentRepository.touchByMessageIds(ids, ZonedDateTime.now());
+        }
+
         return messages;
     }
 
