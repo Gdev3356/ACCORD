@@ -143,6 +143,7 @@ public class DmService {
         populateForwardedFrom(List.of(msg));
     }
 
+    @Transactional
     public List<DmMessage> getMessages(UUID conversationId, UUID requesterId,
                                        UUID beforeId, int limit) {
         assertParticipant(conversationId, requesterId);
