@@ -13,6 +13,8 @@ import com.main.accord.domain.server.SvEmojiRepository;
 import com.main.accord.security.EncryptionService;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -46,7 +48,10 @@ public class UploadService {
     private final EncryptionService      encryptionService;
     private final DmService              dmService;
     private final SvEmojiRepository      emojiRepository;
-    private final VideoCompressor        videoCompressor;
+
+    @Autowired
+    @Lazy
+    private VideoCompressor videoCompressor;
 
     @Value("${supabase.storage.bucket}")
     private String bucket;
@@ -257,21 +262,6 @@ public class UploadService {
     // =========================================================================
     // DM attachment
     // =========================================================================
-
-    // Called by VideoCompressor — same package, bridges the private upload()
-    void uploadPackage(String key, byte[] data, String contentType) {
-        upload(key, data, contentType);
-    }
-
-    // Called by VideoCompressor to fetch the raw video for FFmpeg
-    byte[] downloadFromS3(String key) {
-        return s3Client.getObjectAsBytes(
-                software.amazon.awssdk.services.s3.model.GetObjectRequest.builder()
-                        .bucket(bucket)
-                        .key(key)
-                        .build()
-        ).asByteArray();
-    }
 
     public String uploadDmAttachment(UUID messageId, MultipartFile file) throws IOException {
         if (file.isEmpty())

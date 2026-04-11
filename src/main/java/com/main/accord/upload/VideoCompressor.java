@@ -6,9 +6,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -18,8 +22,8 @@ import java.util.concurrent.TimeUnit;
 public class VideoCompressor {
 
     private final DmAttachmentRepository dmAttachmentRepository;
-    private final UploadService          uploadService;
     private final DmService              dmService;
+    private final S3Client               s3Client;   // ← inject directly, no UploadService
 
     @Value("${supabase.storage.bucket}")
     private String bucket;
@@ -32,8 +36,9 @@ public class VideoCompressor {
         File inFile  = null;
         File outFile = null;
         try {
-            // Fetch raw bytes from S3 to compress
-            byte[] rawBytes = uploadService.downloadFromS3(originalKey);
+            byte[] rawBytes = s3Client.getObjectAsBytes(
+                    GetObjectRequest.builder().bucket(bucket).key(originalKey).build()
+            ).asByteArray();
 
             inFile  = File.createTempFile("accord_in_",  ".mp4");
             outFile = File.createTempFile("accord_out_", ".mp4");
@@ -57,7 +62,17 @@ public class VideoCompressor {
 
             byte[] compressed = Files.readAllBytes(outFile.toPath());
             String newKey     = originalKey.replace(".mp4", "_c.mp4");
-            uploadService.uploadPackage(newKey, compressed, "video/mp4");
+
+            s3Client.putObject(
+                    PutObjectRequest.builder()
+                            .bucket(bucket)
+                            .key(newKey)
+                            .contentType("video/mp4")
+                            .cacheControl("public, max-age=31536000, immutable")
+                            .build(),
+                    RequestBody.fromBytes(compressed)
+            );
+
             String newUrl = publicUrl + "/" + bucket + "/" + newKey;
 
             dmAttachmentRepository.findById(attachmentId).ifPresent(att -> {
@@ -67,7 +82,9 @@ public class VideoCompressor {
                 dmService.broadcastAttachmentUpdate(att.getIdMessage());
             });
 
-            uploadService.deleteFromS3(rawUrl);
+            s3Client.deleteObject(
+                    DeleteObjectRequest.builder().bucket(bucket).key(originalKey).build()
+            );
 
         } catch (Exception e) {
             // Raw file stays intact — compression failure is silent to the user
