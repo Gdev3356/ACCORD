@@ -98,8 +98,8 @@ public class UploadService {
             throw new AccordException("Profile picture must be a JPEG, PNG, GIF, or WebP image.");
 
         byte[] resized = resizeImage(file, 256, 256);
-        String key     = "pfp/" + userId + ".jpg";   // deterministic — overwrites old pfp
-        upload(key, resized, "image/jpeg");
+        String key = "pfp/" + userId + ".webp";     // deterministic — overwrites old pfp
+        upload(key, resized, "image/webp");
         String url = publicUrl + "/" + bucket + "/" + key;
 
         visualsRepository.findById(userId).ifPresent(v -> {
@@ -125,8 +125,8 @@ public class UploadService {
 
         // Resize to a fixed canvas — raw 8MB PNGs are not stored as-is
         byte[] resized = resizeImage(file, BANNER_WIDTH, BANNER_HEIGHT);
-        String key     = "banners/" + userId + ".jpg";  // deterministic — overwrites old banner
-        upload(key, resized, "image/jpeg");
+        String key = "banners/" + userId + ".webp";  // deterministic — overwrites old banner
+        upload(key, resized, "image/webp");
         String url = publicUrl + "/" + bucket + "/" + key;
 
         visualsRepository.findById(userId).ifPresent(v -> {
@@ -213,9 +213,9 @@ public class UploadService {
                 width  = img.getWidth();
                 height = img.getHeight();
             }
-            bytes            = toJpeg(img);
-            finalContentType = "image/jpeg";
-            ext              = ".jpg";
+            bytes            = toWebp(img);         // ← was toJpeg
+            finalContentType = "image/webp";        // ← was image/jpeg
+            ext              = ".webp";             // ← was .jpg
         }
 
         // ── Deduplication ─────────────────────────────────────────────────────
@@ -284,9 +284,9 @@ public class UploadService {
                 width  = img.getWidth();
                 height = img.getHeight();
             }
-            bytes            = toJpeg(img);
-            finalContentType = "image/jpeg";
-            ext              = ".jpg";
+            bytes            = toWebp(img);         // ← was toJpeg
+            finalContentType = "image/webp";        // ← was image/jpeg
+            ext              = ".webp";             // ← was .jpg
         }
 
         // ── Deduplication ─────────────────────────────────────────────────────
@@ -377,12 +377,12 @@ public class UploadService {
         BufferedImage src = ImageIO.read(file.getInputStream());
         if (src == null)
             throw new AccordException("Could not read image — file may be corrupt or unsupported.");
-        BufferedImage dest = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        BufferedImage dest = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);  // ARGB now
         Graphics2D g = dest.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.drawImage(src.getScaledInstance(w, h, Image.SCALE_SMOOTH), 0, 0, null);
         g.dispose();
-        return toJpeg(dest);
+        return toWebp(dest);
     }
 
     /** Scale so the longest edge = maxDim, preserving aspect ratio. */
@@ -390,7 +390,7 @@ public class UploadService {
         int w = src.getWidth(), h = src.getHeight();
         double scale = Math.min((double) maxDim / w, (double) maxDim / h);
         int nw = (int) (w * scale), nh = (int) (h * scale);
-        BufferedImage dest = new BufferedImage(nw, nh, BufferedImage.TYPE_INT_RGB);
+        BufferedImage dest = new BufferedImage(nw, nh, BufferedImage.TYPE_INT_ARGB);  // ARGB now
         Graphics2D g = dest.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.drawImage(src, 0, 0, nw, nh, null);
@@ -405,9 +405,17 @@ public class UploadService {
         return img;
     }
 
-    private byte[] toJpeg(BufferedImage img) throws IOException {
+    private byte[] toWebp(BufferedImage img) throws IOException {
+        // Ensure ARGB for WebP — it handles alpha natively
+        if (img.getType() != BufferedImage.TYPE_INT_ARGB) {
+            BufferedImage argb = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = argb.createGraphics();
+            g.drawImage(img, 0, 0, null);
+            g.dispose();
+            img = argb;
+        }
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ImageIO.write(img, "jpg", out);
+        ImageIO.write(img, "webp", out);
         return out.toByteArray();
     }
 
