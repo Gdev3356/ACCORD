@@ -46,6 +46,7 @@ public class UploadService {
     private final EncryptionService      encryptionService;
     private final DmService              dmService;
     private final SvEmojiRepository      emojiRepository;
+    private final VideoCompressor        videoCompressor;
 
     @Value("${supabase.storage.bucket}")
     private String bucket;
@@ -257,6 +258,21 @@ public class UploadService {
     // DM attachment
     // =========================================================================
 
+    // Called by VideoCompressor — same package, bridges the private upload()
+    void uploadPackage(String key, byte[] data, String contentType) {
+        upload(key, data, contentType);
+    }
+
+    // Called by VideoCompressor to fetch the raw video for FFmpeg
+    byte[] downloadFromS3(String key) {
+        return s3Client.getObjectAsBytes(
+                software.amazon.awssdk.services.s3.model.GetObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(key)
+                        .build()
+        ).asByteArray();
+    }
+
     public String uploadDmAttachment(UUID messageId, MultipartFile file) throws IOException {
         if (file.isEmpty())
             throw new AccordException("File is empty.");
@@ -273,6 +289,29 @@ public class UploadService {
         String   ext              = getExtension(file.getOriginalFilename());
         Integer  width            = null;
         Integer  height           = null;
+
+        if (contentType.startsWith("video/")) {
+            // 1. Upload raw immediately so the user sees something
+            String key = "dm-attachments/" + messageId + "/" + UUID.randomUUID() + ext;
+            upload(key, bytes, contentType);
+            String rawUrl = publicUrl + "/" + bucket + "/" + key;
+
+            // 2. Save attachment row with raw URL
+            DmAttachment saved = dmAttachmentRepository.save(DmAttachment.builder()
+                    .idMessage(messageId)
+                    .dsUrl(rawUrl)
+                    .dsFilename(file.getOriginalFilename())
+                    .dsMimeType(contentType)
+                    .nrSizeBytes(file.getSize())
+                    .dtLastAccessed(ZonedDateTime.now())
+                    .build());
+
+            // 3. Queue compression — updates the row and rebroadcasts when done
+            videoCompressor.compressAsync(saved.getIdAttachment(), key, rawUrl);
+
+            dmService.broadcastAttachmentUpdate(messageId);
+            return rawUrl;
+        }
 
         if (contentType.startsWith("image/") && !"image/gif".equalsIgnoreCase(contentType)) {
             BufferedImage img = readImage(bytes);
