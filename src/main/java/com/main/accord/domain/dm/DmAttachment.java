@@ -2,6 +2,8 @@ package com.main.accord.domain.dm;
 
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.time.ZonedDateTime;
 import java.util.UUID;
 
 @Entity
@@ -33,4 +35,12 @@ public class DmAttachment {
 
     @Column(name = "NR_HEIGHT")
     private Integer nrHeight;
+
+    // Inside DmAttachment.java — add this field
+    @Column(name = "dt_last_accessed")
+    private ZonedDateTime dtLastAccessed = ZonedDateTime.now();
+
+    // And for deduplication support
+    @Column(name = "ds_sha256")
+    private String dsSha256;
 }
