@@ -32,7 +32,7 @@ public class DmService {
     private final FriendshipRepository    friendshipRepository;
     private final ChatHandler             chatHandler;
     private final DmReadStateRepository dmReadStateRepository;
-    public record SendMessageRequest(String content, UUID replyToId, UUID forwardAttachmentFrom) {}
+    public record SendMessageRequest(String content, UUID replyToId, UUID forwardAttachmentFrom, String tpMessage, Map<String, Object> jsActivity) {}
     private final NotificationService notificationService;
     private final AccountRepository accountRepository; // to resolve sender name
     private final VisualsRepository visualsRepository;
@@ -166,7 +166,8 @@ public class DmService {
 
     @Transactional
     public DmMessage sendMessage(UUID conversationId, UUID authorId,
-                                 String content, UUID replyToId, UUID forwardAttachmentFrom) {
+                                 String content, UUID replyToId, UUID forwardAttachmentFrom,
+                                 String tpMessage, Map<String, Object> jsActivity) {
         assertParticipant(conversationId, authorId);
 
         // Encrypt before persisting
@@ -179,6 +180,8 @@ public class DmService {
                         .dsContent(encryptedContent)
                         .idReplyTo(replyToId)
                         .idForwardedFrom(forwardAttachmentFrom)
+                        .tpMessage(tpMessage != null ? tpMessage : "text")
+                        .jsActivity(jsActivity)
                         .build()
         );
 
@@ -468,6 +471,8 @@ public class DmService {
         copy.setDtEdited(source.getDtEdited());
         copy.setAttachments(source.getAttachments());
         copy.setForwardedFrom(source.getForwardedFrom());
+        copy.setTpMessage(source.getTpMessage());
+        copy.setJsActivity(source.getJsActivity());
         return copy;
     }
 

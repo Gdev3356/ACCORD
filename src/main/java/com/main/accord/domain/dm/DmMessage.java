@@ -60,4 +60,12 @@ public class DmMessage {
         private UUID   idUser;
         private String dsDisplayName;
     }
+
+    @Builder.Default
+    @Column(name = "TP_MESSAGE", nullable = false, length = 20)
+    private String tpMessage = "text";
+
+    @Column(name = "JS_ACTIVITY", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private java.util.Map<String, Object> jsActivity;
 }

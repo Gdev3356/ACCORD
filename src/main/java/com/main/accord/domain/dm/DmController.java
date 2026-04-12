@@ -18,7 +18,7 @@ public class DmController {
 
     private final DmService dmService;
     private final DmReadStateRepository dmReadStateRepository;
-    public record SendMessageRequest(String content, UUID replyToId, UUID forwardAttachmentFrom) {}
+    public record SendMessageRequest(String content, UUID replyToId, UUID forwardAttachmentFrom, String tpMessage, java.util.Map<String, Object> jsActivity) {}
 
     // GET /api/v1/dm — all conversations for current user
     @GetMapping
@@ -68,7 +68,7 @@ public class DmController {
             @RequestBody SendMessageRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
-                dmService.sendMessage(conversationId, principal.userId(), req.content(), req.replyToId(), req.forwardAttachmentFrom())
+                dmService.sendMessage(conversationId, principal.userId(), req.content(), req.replyToId(), req.forwardAttachmentFrom(), req.tpMessage(), req.jsActivity())
         ));
     }
 
