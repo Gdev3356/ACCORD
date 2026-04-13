@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -16,33 +17,102 @@ public class ServerController {
 
     private final ServerService serverService;
 
+    // GET /api/v1/servers
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<Server>>> getMyServers(
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                serverService.getMyServers(principal.userId())
+        ));
+    }
+
+    // GET /api/v1/servers/{serverId}
+    @GetMapping("/{serverId}")
+    public ResponseEntity<ApiResponse<Server>> getServer(
+            @PathVariable UUID serverId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                serverService.getServer(serverId, principal.userId())
+        ));
+    }
+
+    // POST /api/v1/servers
     @PostMapping
     public ResponseEntity<ApiResponse<Server>> createServer(
             @RequestBody CreateServerRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
-
         return ResponseEntity.ok(ApiResponse.ok(
                 serverService.createServer(principal.userId(), req.name())
         ));
     }
 
+    // PATCH /api/v1/servers/{serverId}
+    @PatchMapping("/{serverId}")
+    public ResponseEntity<ApiResponse<Server>> updateServer(
+            @PathVariable UUID serverId,
+            @RequestBody ServerService.UpdateServerRequest req,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                serverService.updateServer(serverId, principal.userId(), req)
+        ));
+    }
+
+    // DELETE /api/v1/servers/{serverId}
+    @DeleteMapping("/{serverId}")
+    public ResponseEntity<ApiResponse<Void>> deleteServer(
+            @PathVariable UUID serverId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        serverService.deleteServer(serverId, principal.userId());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // GET /api/v1/servers/{serverId}/members
+    @GetMapping("/{serverId}/members")
+    public ResponseEntity<ApiResponse<List<Member>>> getMembers(
+            @PathVariable UUID serverId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                serverService.getMembers(serverId, principal.userId())
+        ));
+    }
+
+    // DELETE /api/v1/servers/{serverId}/members/{userId}  (kick)
     @DeleteMapping("/{serverId}/members/{userId}")
     public ResponseEntity<ApiResponse<Void>> kickMember(
             @PathVariable UUID serverId,
             @PathVariable UUID userId,
             @AuthenticationPrincipal AccordPrincipal principal) {
-
         serverService.kickMember(principal.userId(), serverId, userId);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
+    // DELETE /api/v1/servers/{serverId}/leave
+    @DeleteMapping("/{serverId}/leave")
+    public ResponseEntity<ApiResponse<Void>> leaveServer(
+            @PathVariable UUID serverId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        serverService.leaveServer(serverId, principal.userId());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // POST /api/v1/invites/{code}/join  (convenience — delegates to InviteService)
     @PostMapping("/invites/{code}/join")
     public ResponseEntity<ApiResponse<Invite>> joinByInvite(
             @PathVariable String code,
             @AuthenticationPrincipal AccordPrincipal principal) {
-
         return ResponseEntity.ok(ApiResponse.ok(
                 serverService.joinByInvite(principal.userId(), code)
+        ));
+    }
+
+    @PatchMapping("/{serverId}/members/{userId}")
+    public ResponseEntity<ApiResponse<Member>> updateMember(
+            @PathVariable UUID serverId,
+            @PathVariable UUID userId,
+            @RequestBody ServerService.UpdateMemberRequest req,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                serverService.updateMember(principal.userId(), serverId, userId, req)
         ));
     }
 

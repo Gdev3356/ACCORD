@@ -4,6 +4,8 @@ import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
 import com.main.accord.domain.account.BanLog;
 import com.main.accord.domain.account.BanLogRepository;
+import com.main.accord.domain.notification.NotifType;
+import com.main.accord.domain.notification.NotificationService;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import com.main.accord.websocket.ChatHandler;
@@ -27,6 +29,7 @@ public class BanService {
     private final ServerRepository    serverRepository;
     private final PermissionService   permissionService;
     private final ChatHandler         chatHandler;
+    private final NotificationService notificationService;
 
     // ── Server ban ────────────────────────────────────────────────────────────
 
@@ -35,7 +38,6 @@ public class BanService {
         Server server = serverRepository.findById(serverId)
                 .orElseThrow(() -> new NotFoundException("Server not found."));
 
-        // Owner cannot be banned
         if (server.getIdOwner().equals(targetId)) {
             throw new ForbiddenException("Cannot ban the server owner.");
         }
@@ -44,10 +46,8 @@ public class BanService {
             throw new ForbiddenException("You don't have permission to ban members.");
         }
 
-        // Can't ban someone with a higher role position than you
         assertRoleHierarchy(requesterId, targetId, serverId);
 
-        // Insert the server ban record
         ServerBan ban = serverBanRepository.save(
                 ServerBan.builder()
                         .idServer(serverId)
@@ -57,15 +57,29 @@ public class BanService {
                         .build()
         );
 
-        // Kick from server if still a member
         if (memberRepository.existsByIdServerAndIdUser(serverId, targetId)) {
             memberRepository.deleteByIdServerAndIdUser(serverId, targetId);
         }
 
-        // Notify the banned user via WebSocket before their session becomes invalid
+        // Persist a notification record AND push it over WebSocket before their session drops
+        notificationService.send(
+                targetId,
+                NotifType.ban,
+                "You have been banned",
+                reason != null ? reason : "You were banned from a server.",
+                Map.of(
+                        "serverId", serverId.toString(),
+                        "type",     "server_ban"
+                )
+        );
+
+        // Separate WebSocket push so the client knows to immediately close that server's UI
         chatHandler.sendToUser(targetId, Map.of(
                 "type", "SERVER_BAN",
-                "data", Map.of("serverId", serverId, "reason", reason != null ? reason : "")
+                "data", Map.of(
+                        "serverId", serverId,
+                        "reason",   reason != null ? reason : ""
+                )
         ));
 
         return ban;
@@ -102,16 +116,28 @@ public class BanService {
                         .idUser(targetId)
                         .idBannedBy(adminId)
                         .dsReason(reason)
-                        .dtExpires(expires)   // null = permanent
+                        .dtExpires(expires)
                         .stLifted(false)
                         .build()
         );
 
-        // Force disconnect the user via WebSocket
+        notificationService.send(
+                targetId,
+                NotifType.ban,
+                "Your account has been suspended",
+                reason != null ? reason : "Your account has been suspended.",
+                Map.of(
+                        "type",    "platform_ban",
+                        "expires", expires != null ? expires.toString() : "permanent"
+                )
+        );
+
         chatHandler.sendToUser(targetId, Map.of(
                 "type", "PLATFORM_BAN",
-                "data", Map.of("reason", reason != null ? reason : "", "expires",
-                        expires != null ? expires.toString() : "permanent")
+                "data", Map.of(
+                        "reason",  reason != null ? reason : "",
+                        "expires", expires != null ? expires.toString() : "permanent"
+                )
         ));
 
         return ban;

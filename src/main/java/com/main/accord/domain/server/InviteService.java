@@ -3,6 +3,8 @@ package com.main.accord.domain.server;
 import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.notification.NotifType;
+import com.main.accord.domain.notification.NotificationService;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -25,6 +28,7 @@ public class InviteService {
     private final MemberRepository  memberRepository;
     private final ServerRepository  serverRepository;
     private final PermissionService permissionService;
+    private final NotificationService notificationService;
 
     // ── List invites for a server ─────────────────────────────────────────────
 
@@ -81,7 +85,6 @@ public class InviteService {
 
     @Transactional
     public Invite joinByCode(UUID userId, String code) {
-        // Clean up any stale invites first
         inviteRepository.expireStale();
 
         Invite invite = inviteRepository.findByDsCode(code)
@@ -91,7 +94,6 @@ public class InviteService {
             throw new AccordException("This invite has expired or been revoked.");
         }
 
-        // Check expiry explicitly (expireStale covers bulk but not this exact moment)
         if (invite.getDtExpires() != null && invite.getDtExpires().isBefore(OffsetDateTime.now())) {
             invite.setStStatus(InviteStatus.expired);
             inviteRepository.save(invite);
@@ -100,16 +102,13 @@ public class InviteService {
 
         UUID serverId = invite.getIdServer();
 
-        // Already a member — silently succeed
         if (memberRepository.existsByIdServerAndIdUser(serverId, userId)) {
             return invite;
         }
 
-        // Check server exists
         serverRepository.findById(serverId)
                 .orElseThrow(() -> new NotFoundException("Server no longer exists."));
 
-        // Add member
         memberRepository.save(
                 Member.builder()
                         .idServer(serverId)
@@ -117,12 +116,26 @@ public class InviteService {
                         .build()
         );
 
-        // Increment use count and auto-expire if max uses reached
         invite.setNrUses(invite.getNrUses() + 1);
         if (invite.getNrMaxUses() != null && invite.getNrUses() >= invite.getNrMaxUses()) {
             invite.setStStatus(InviteStatus.expired);
         }
         inviteRepository.save(invite);
+
+        // Notify the invite creator that someone joined via their link
+        if (invite.getIdCreator() != null && !invite.getIdCreator().equals(userId)) {
+            notificationService.send(
+                    invite.getIdCreator(),
+                    NotifType.server_invite,
+                    "Someone joined your server",
+                    "A user joined via your invite link.",
+                    Map.of(
+                            "serverId", serverId.toString(),
+                            "userId",   userId.toString(),
+                            "code",     code
+                    )
+            );
+        }
 
         return invite;
     }
