@@ -177,6 +177,12 @@ public class AbLevelService {
         return scoreRepository.findLeaderboard(levelId, PageRequest.of(0, 100));
     }
 
+    @Transactional(readOnly = true)
+    public AbScore getUserScore(UUID userId, UUID levelId) {
+        _requireExists(levelId); // Ensure the level actually exists first
+        return scoreRepository.findByIdLevelAndIdUser(levelId, userId)
+                .orElse(null);
+    }
     // ── Votes ─────────────────────────────────────────────────────────────────
 
     /**

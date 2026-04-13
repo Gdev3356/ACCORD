@@ -96,6 +96,15 @@ public class AbLevelController {
         return ResponseEntity.ok(ApiResponse.ok(levelService.getLeaderboard(levelId)));
     }
 
+    /** GET /api/v1/ab/levels/{levelId}/my-score */
+    @GetMapping("/{levelId}/my-score")
+    public ResponseEntity<ApiResponse<AbScore>> getMyScore(
+            @PathVariable UUID levelId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                levelService.getUserScore(principal.userId(), levelId)));
+    }
+
     // ── Votes ─────────────────────────────────────────────────────────────────
 
     /** POST /api/v1/ab/levels/{levelId}/vote */
