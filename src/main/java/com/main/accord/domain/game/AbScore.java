@@ -22,5 +22,5 @@ public class AbScore {
     @Column(name = "NR_STARS", nullable = false) private Short nrStars = 1;
 
     @CreationTimestamp
-    @Column(name = "DT_ACHIEVED", updatable = false) private OffsetDateTime dtAchieved;
+    @Column(name = "DT_ACHIEVED") private OffsetDateTime dtAchieved;
 }

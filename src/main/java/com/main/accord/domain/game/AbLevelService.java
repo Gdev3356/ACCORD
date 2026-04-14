@@ -132,7 +132,9 @@ public class AbLevelService {
     }
 
     @Transactional(readOnly = true)
-    public List<AbLevel> getByCreator(UUID userId) { return levelRepository.findByCreator(userId); }
+    public List<AbLevel> getByCreator(UUID userId) {
+        return levelRepository.findByCreator(userId);
+    }
 
     @Transactional(readOnly = true)
     public AbLevel getById(UUID levelId) { return _requireExists(levelId); }
@@ -148,6 +150,8 @@ public class AbLevelService {
         AbLevel level = _requireExists(levelId);
         if (!level.getStPublished() && !level.getIdCreator().equals(userId))
             throw new ForbiddenException("That level is not published yet.");
+        if (stars < 1 || stars > 3)
+            throw new AccordException("Stars must be between 1 and 3.");
 
         var existing = scoreRepository.findByIdLevelAndIdUser(levelId, userId);
 
