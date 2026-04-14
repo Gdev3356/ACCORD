@@ -3,6 +3,8 @@ package com.main.accord.domain.server;
 import com.main.accord.common.ApiResponse;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.permission.PermissionService;
+import com.main.accord.permission.Permissions;
 import com.main.accord.security.AccordPrincipal;
 import com.main.accord.upload.UploadService;
 import lombok.RequiredArgsConstructor;
@@ -23,14 +25,17 @@ public class EmojiController {
     private final SvEmojiRepository  emojiRepository;
     private final ServerRepository   serverRepository;   // to check ownership
     private final UploadService      uploadService;
+    private final MemberRepository   memberRepository;
+    private final PermissionService permissionService;
 
     // GET /api/v1/servers/{serverId}/emojis
     @GetMapping
     public ResponseEntity<ApiResponse<List<SvEmoji>>> getEmojis(
-            @PathVariable UUID serverId) {
-        return ResponseEntity.ok(ApiResponse.ok(
-                emojiRepository.findByIdServer(serverId)
-        ));
+            @PathVariable UUID serverId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        if (!memberRepository.existsByIdServerAndIdUser(serverId, principal.userId()))
+            throw new ForbiddenException("Not a member.");
+        return ResponseEntity.ok(ApiResponse.ok(emojiRepository.findByIdServer(serverId)));
     }
 
     // POST /api/v1/servers/{serverId}/emojis  (multipart)
@@ -61,8 +66,8 @@ public class EmojiController {
             @PathVariable UUID serverId,
             @PathVariable UUID emojiId,
             @AuthenticationPrincipal AccordPrincipal principal) {
-
-        assertManageEmojis(serverId, principal.userId());
+        if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_SERVER))
+            throw new ForbiddenException("No permission.");
         uploadService.deleteEmoji(emojiId);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
