@@ -32,9 +32,13 @@ public class Invite {
     @Column(name = "NR_MAX_USES")
     private Integer nrMaxUses;          // NULL = unlimited
 
-    @Builder.Default @Column(name = "NR_USES")   private Integer nrUses   = 0;
-    @Builder.Default @Enumerated(EnumType.STRING)
-    @Column(name = "ST_STATUS", nullable = false)
+    @Builder.Default @Column(name = "NR_USES")
+    private Integer nrUses   = 0;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ST_STATUS", nullable = false, columnDefinition = "invite_status")
+    @org.hibernate.annotations.ColumnTransformer(write = "?::invite_status")
     private InviteStatus stStatus = InviteStatus.active;
 
     @CreationTimestamp
