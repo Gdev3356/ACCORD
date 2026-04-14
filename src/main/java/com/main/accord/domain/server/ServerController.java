@@ -116,5 +116,14 @@ public class ServerController {
         ));
     }
 
+    @GetMapping("/{serverId}/permissions")
+    public ResponseEntity<ApiResponse<Long>> getMyPermissions(
+            @PathVariable UUID serverId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                serverService.getMyPermissions(principal.userId(), serverId)
+        ));
+    }
+
     public record CreateServerRequest(String name) {}
 }

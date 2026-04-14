@@ -203,6 +203,14 @@ public class ServerService {
         }
     }
 
+    public long getMyPermissions(UUID userId, UUID serverId) {
+        // Throws ForbiddenException if not a member, which is the right behavior
+        if (!memberRepository.existsByIdServerAndIdUser(serverId, userId)) {
+            throw new ForbiddenException("You are not a member of this server.");
+        }
+        return permissionService.computeEffective(userId, null, serverId);
+    }
+
     // ── Request records ───────────────────────────────────────────────────────
 
     public record UpdateServerRequest(
