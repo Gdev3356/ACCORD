@@ -2,6 +2,7 @@ package com.main.accord.domain.server;
 
 import com.main.accord.common.ApiResponse;
 import com.main.accord.security.AccordPrincipal;
+import com.main.accord.common.ForbiddenException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -155,7 +156,22 @@ public class ServerController {
     }
     public record CreateServerRequest(String name) {}
 
-    // In ServerController.java
+    // GET /api/v1/servers/{serverId}/members/{userId}
+    @GetMapping("/{serverId}/members/{userId}")
+    public ResponseEntity<ApiResponse<Member>> getMember(
+            @PathVariable UUID serverId,
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+
+        // Check if requester is a member of the server
+        if (!serverService.isMember(serverId, principal.userId())) {
+            throw new ForbiddenException("You are not a member of this server.");
+        }
+
+        Member member = serverService.getMember(serverId, userId);
+        return ResponseEntity.ok(ApiResponse.ok(member));
+    }
+
     @PatchMapping("/{serverId}/members/{userId}/nickname")
     public ResponseEntity<ApiResponse<Member>> changeNickname(
             @PathVariable UUID serverId,

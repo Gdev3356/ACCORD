@@ -424,6 +424,15 @@ public class ServerService {
         return permissionService.computeEffective(userId, null, serverId);
     }
 
+    public boolean isMember(UUID serverId, UUID userId) {
+        return memberRepository.existsByIdServerAndIdUser(serverId, userId);
+    }
+
+    public Member getMember(UUID serverId, UUID userId) {
+        return memberRepository.findByIdServerAndIdUser(serverId, userId)
+                .orElseThrow(() -> new NotFoundException("Member not found."));
+    }
+
     // ── Request records ───────────────────────────────────────────────────────
 
     public record UpdateServerRequest(
