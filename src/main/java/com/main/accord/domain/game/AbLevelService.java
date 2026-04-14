@@ -108,8 +108,9 @@ public class AbLevelService {
         level.setStPublished(true);
         AbLevel saved = levelRepository.save(level);
 
-        // FIX: achievement fires on publish, not on draft save
+        // Award achievements
         _tryUnlock(creatorId, "ab.creator");
+        _tryUnlock(creatorId, "ab.beat_own_level");  // Add this line
         return saved;
     }
 

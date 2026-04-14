@@ -3,10 +3,13 @@ package com.main.accord.domain.server;
 import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.channel.ChannelRepository;
+import com.main.accord.domain.channel.ChannelType;
 import com.main.accord.domain.notification.NotifType;
 import com.main.accord.domain.notification.NotificationService;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
+import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +32,8 @@ public class InviteService {
     private final ServerRepository  serverRepository;
     private final PermissionService permissionService;
     private final NotificationService notificationService;
+    private final ChatHandler chatHandler;
+    private final ChannelRepository channelRepository;
 
     // ── List invites for a server ─────────────────────────────────────────────
 
@@ -137,6 +142,19 @@ public class InviteService {
                     )
             );
         }
+
+        // Broadcast member join to the server's first text channel
+        channelRepository.findByIdServerOrderByNrPositionAsc(serverId).stream()
+                .filter(c -> c.getTpChannel() == ChannelType.text)
+                .findFirst()
+                .ifPresent(firstTextChannel ->
+                        chatHandler.broadcastToChannel(firstTextChannel.getIdChannel(), Map.of(
+                                "type", "MEMBER_JOIN",
+                                "data", Map.of(
+                                        "userId", userId.toString()
+                                )
+                        ))
+                );
 
         return invite;
     }
