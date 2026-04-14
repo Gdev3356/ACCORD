@@ -29,8 +29,9 @@ public class Channel {
     @Column(name = "DS_TOPIC", length = 1024)
     private String dsTopic;
 
-    @Builder.Default @Enumerated(EnumType.STRING)
-    @Column(name = "TP_CHANNEL", nullable = false)
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "TP_CHANNEL", nullable = false, columnDefinition = "channel_type")
     private ChannelType tpChannel = ChannelType.text;
 
     @Builder.Default @Column(name = "NR_POSITION")  private Short   nrPosition = 0;
