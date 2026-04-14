@@ -23,7 +23,6 @@ import java.util.UUID;
 public class EmojiController {
 
     private final SvEmojiRepository  emojiRepository;
-    private final ServerRepository   serverRepository;   // to check ownership
     private final UploadService      uploadService;
     private final MemberRepository   memberRepository;
     private final PermissionService permissionService;
@@ -75,9 +74,7 @@ public class EmojiController {
     // Only server owner can manage emojis for now
     // Swap this for a permission bitmask check if you add roles later
     private void assertManageEmojis(UUID serverId, UUID userId) {
-        var server = serverRepository.findById(serverId)
-                .orElseThrow(() -> new NotFoundException("Server not found."));
-        if (!server.getIdOwner().equals(userId))
+        if (!permissionService.can(userId, null, serverId, Permissions.MANAGE_SERVER))
             throw new ForbiddenException("You don't have permission to manage emojis.");
     }
 }
