@@ -86,6 +86,7 @@ public class MessageService {
         return broadcast;
     }
 
+    @Transactional
     public List<Message> getMessages(UUID channelId, UUID requesterId, UUID beforeId, int limit) {
         Channel channel = channelRepository.findById(channelId)
                 .orElseThrow(() -> new NotFoundException("Channel not found."));
