@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,10 +28,10 @@ public interface InviteRepository extends JpaRepository<Invite, UUID> {
         UPDATE Invite i SET i.stStatus = com.main.accord.domain.server.InviteStatus.expired
         WHERE i.stStatus = com.main.accord.domain.server.InviteStatus.active
           AND (
-            (i.dtExpires IS NOT NULL AND i.dtExpires < CURRENT_TIMESTAMP)
+            (i.dtExpires IS NOT NULL AND i.dtExpires < :now)
             OR
             (i.nrMaxUses IS NOT NULL AND i.nrUses >= i.nrMaxUses)
           )
     """)
-    void expireStale();
+    void expireStale(OffsetDateTime now);
 }

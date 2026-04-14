@@ -85,7 +85,8 @@ public class InviteService {
 
     @Transactional
     public Invite joinByCode(UUID userId, String code) {
-        inviteRepository.expireStale();
+        OffsetDateTime now = OffsetDateTime.now();
+        inviteRepository.expireStale(now);
 
         Invite invite = inviteRepository.findByDsCode(code)
                 .orElseThrow(() -> new NotFoundException("Invalid invite code."));
@@ -143,7 +144,8 @@ public class InviteService {
     // ── Lookup (for preview before joining) ───────────────────────────────────
 
     public Invite previewInvite(String code) {
-        inviteRepository.expireStale();
+        OffsetDateTime now = OffsetDateTime.now();
+        inviteRepository.expireStale(now);
         Invite invite = inviteRepository.findByDsCode(code)
                 .orElseThrow(() -> new NotFoundException("Invalid invite code."));
 
