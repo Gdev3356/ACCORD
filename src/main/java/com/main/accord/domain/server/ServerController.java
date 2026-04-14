@@ -116,6 +116,31 @@ public class ServerController {
         ));
     }
 
+    @PostMapping("/{serverId}/members/{userId}/timeout")
+    public ResponseEntity<ApiResponse<Member>> timeoutMember(
+            @PathVariable UUID serverId,
+            @PathVariable UUID userId,
+            @RequestBody TimeoutRequest request,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+
+        return ResponseEntity.ok(ApiResponse.ok(
+                serverService.timeoutMember(principal.userId(), serverId, userId,
+                        request.durationMinutes(), request.reason())
+        ));
+    }
+
+    @DeleteMapping("/{serverId}/members/{userId}/timeout")
+    public ResponseEntity<ApiResponse<Void>> removeTimeout(
+            @PathVariable UUID serverId,
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+
+        serverService.removeTimeout(principal.userId(), serverId, userId);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    public record TimeoutRequest(int durationMinutes, String reason) {}
+
     @GetMapping("/{serverId}/permissions")
     public ResponseEntity<ApiResponse<Long>> getMyPermissions(
             @PathVariable UUID serverId,
@@ -124,6 +149,20 @@ public class ServerController {
                 serverService.getMyPermissions(principal.userId(), serverId)
         ));
     }
-
     public record CreateServerRequest(String name) {}
+
+    // In ServerController.java
+    @PatchMapping("/{serverId}/members/{userId}/nickname")
+    public ResponseEntity<ApiResponse<Member>> changeNickname(
+            @PathVariable UUID serverId,
+            @PathVariable UUID userId,
+            @RequestBody NicknameRequest request,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+
+        return ResponseEntity.ok(ApiResponse.ok(
+                serverService.changeNickname(serverId, userId, principal.userId(), request.nickname())
+        ));
+    }
+
+    public record NicknameRequest(String nickname) {}
 }

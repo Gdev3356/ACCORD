@@ -28,6 +28,12 @@ public class Member {
 
     @Builder.Default @Column(name = "ST_DEAFENED") private Boolean stDeafened = false;
 
+    @Column(name = "ST_TIMEOUT")
+    private Boolean stTimeout;
+
+    @Column(name = "DT_TIMEOUT_EXPIRES")
+    private OffsetDateTime dtTimeoutExpires;
+
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode
     public static class MemberId implements Serializable {
         private UUID idServer;

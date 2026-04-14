@@ -7,6 +7,8 @@ import com.main.accord.domain.channel.ChReadStateRepository;
 import com.main.accord.domain.channel.Channel;
 import com.main.accord.domain.channel.ChannelRepository;
 import com.main.accord.domain.server.BanService;
+import com.main.accord.domain.server.Member;
+import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import com.main.accord.domain.notification.NotificationService;
@@ -17,6 +19,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +40,7 @@ public class MessageService {
     private final BanService            banService;
     private final MsAttachmentRepository msAttachmentRepository;
     private final ChReadStateRepository chReadStateRepository;
+    private final MemberRepository memberRepository;
 
     @Transactional
     public Message sendMessage(UUID channelId, UUID authorId, String content,
@@ -47,6 +51,10 @@ public class MessageService {
 
         Channel channel = channelRepository.findById(channelId)
                 .orElseThrow(() -> new NotFoundException("Channel not found."));
+
+        if (isUserTimedOut(authorId, channel.getIdServer())) {
+            throw new ForbiddenException("You are currently timed out and cannot send messages.");
+        }
 
         if (banService.isServerBanned(authorId, channel.getIdServer()))
             throw new ForbiddenException("You are banned from this server.");
@@ -181,23 +189,59 @@ public class MessageService {
                 new ChatHandler.ChatEvent("CHANNEL_TYPING", Map.of("userId", userId.toString())));
     }
 
+    private boolean isUserTimedOut(UUID userId, UUID serverId) {
+        Member member = memberRepository.findByIdServerAndIdUser(serverId, userId).orElse(null);
+        if (member == null || !Boolean.TRUE.equals(member.getStTimeout())) {
+            return false;
+        }
+
+        OffsetDateTime expires = member.getDtTimeoutExpires();
+        if (expires != null && expires.isBefore(OffsetDateTime.now())) {
+            // Auto-cleanup expired timeout (in case scheduled task hasn't run yet)
+            member.setStTimeout(false);
+            member.setDtTimeoutExpires(null);
+            memberRepository.save(member);
+            return false;
+        }
+        return true;
+    }
+
     @Transactional
     public void deleteMessage(UUID messageId, UUID requesterId) {
         Message msg = messageRepository.findById(messageId)
                 .orElseThrow(() -> new NotFoundException("Message not found."));
 
         Channel channel = channelRepository.findById(msg.getIdChannel()).orElseThrow();
-        boolean isAuthor  = msg.getIdAuthor().equals(requesterId);
+        boolean isAuthor = msg.getIdAuthor().equals(requesterId);
         boolean canManage = permissionService.can(
                 requesterId, msg.getIdChannel(), channel.getIdServer(), Permissions.MANAGE_MESSAGES
         );
 
-        if (!isAuthor && !canManage) throw new ForbiddenException("You can't delete this message.");
+        // NEW: Check role hierarchy if not the author and not a manager
+        if (!isAuthor && !canManage) {
+            // Check if requester has higher role priority than message author
+            if (!hasHigherRolePriority(requesterId, msg.getIdAuthor(), channel.getIdServer())) {
+                throw new ForbiddenException("You cannot delete messages from users with equal or higher role.");
+            }
+        }
+
+        if (!isAuthor && !canManage) {
+            throw new ForbiddenException("You can't delete this message.");
+        }
 
         msg.setStDeleted(true);
         msg.setDsContent(null);
         messageRepository.save(msg);
         chatHandler.broadcastDeleteToChannel(msg.getIdChannel(), messageId);
+    }
+
+    // Add this helper method
+    private boolean hasHigherRolePriority(UUID requesterId, UUID targetId, UUID serverId) {
+        short requesterTop = memberRepository.getHighestRolePosition(requesterId, serverId);
+        short targetTop = memberRepository.getHighestRolePosition(targetId, serverId);
+
+        // Requester needs STRICTLY HIGHER priority (LOWER number)
+        return requesterTop < targetTop;
     }
 
     // Returns a transient copy with plain text content for broadcasting —

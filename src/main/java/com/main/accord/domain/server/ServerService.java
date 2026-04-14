@@ -7,9 +7,11 @@ import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -51,25 +53,39 @@ public class ServerService {
 
     @Transactional
     public Server createServer(UUID ownerId, String name) {
+        // Calculate ALL permissions (or at least the important ones)
+        long allPermissions =
+                Permissions.VIEW_CHANNELS |
+                        Permissions.SEND_MESSAGES |
+                        Permissions.READ_MESSAGE_HISTORY |
+                        Permissions.ATTACH_FILES |
+                        Permissions.EMBED_LINKS |
+                        Permissions.KICK_MEMBERS |      // 16384
+                        Permissions.BAN_MEMBERS |       // 32768
+                        Permissions.MANAGE_SERVER |     // 131072
+                        Permissions.MANAGE_CHANNELS |   // 65536
+                        Permissions.MUTE_MEMBERS |      // 2048
+                        Permissions.DEAFEN_MEMBERS |    // 4096
+                        Permissions.MOVE_MEMBERS |      // 8192
+                        Permissions.MANAGE_MESSAGES |   // 8
+                        Permissions.MENTION_EVERYONE |  // 128
+                        Permissions.SEND_TTS;           // 4
+
         Server server = serverRepository.save(
                 Server.builder()
                         .idOwner(ownerId)
                         .dsName(name)
-                        .nrPermissions(
-                                Permissions.VIEW_CHANNELS    |
-                                        Permissions.SEND_MESSAGES    |
-                                        Permissions.READ_MESSAGE_HISTORY |
-                                        Permissions.ATTACH_FILES     |
-                                        Permissions.EMBED_LINKS
-                        )
+                        .nrPermissions(allPermissions)  // ← Use all permissions
                         .build()
         );
+
         memberRepository.save(
                 Member.builder()
                         .idServer(server.getIdServer())
                         .idUser(ownerId)
                         .build()
         );
+
         return server;
     }
 
@@ -139,6 +155,115 @@ public class ServerService {
         memberRepository.deleteByIdServerAndIdUser(serverId, userId);
     }
 
+    // ── Muting Member ──────────────────────────────────────────────────────────────
+    @Transactional
+    public Member timeoutMember(UUID requesterId, UUID serverId, UUID targetId,
+                                int durationMinutes, String reason) {
+        // Check permission
+        if (!permissionService.can(requesterId, null, serverId, Permissions.TIMEOUT_MEMBERS)) {
+            throw new ForbiddenException("You don't have permission to timeout members.");
+        }
+
+        // Check role hierarchy (can't timeout someone with higher/equal role)
+        assertRoleHierarchy(requesterId, targetId, serverId);
+
+        // Can't timeout the owner
+        Server server = serverRepository.findById(serverId)
+                .orElseThrow(() -> new NotFoundException("Server not found."));
+        if (server.getIdOwner().equals(targetId)) {
+            throw new ForbiddenException("Cannot timeout the server owner.");
+        }
+
+        Member member = memberRepository.findByIdServerAndIdUser(serverId, targetId)
+                .orElseThrow(() -> new NotFoundException("Member not found."));
+
+        OffsetDateTime expiresAt = OffsetDateTime.now().plusMinutes(durationMinutes);
+        member.setStTimeout(true);
+        member.setDtTimeoutExpires(expiresAt);
+
+        Member saved = memberRepository.save(member);
+
+        // Notify via WebSocket
+        chatHandler.sendToUser(targetId, Map.of(
+                "type", "MEMBER_TIMEOUT",
+                "data", Map.of(
+                        "serverId", serverId,
+                        "expiresAt", expiresAt.toString(),
+                        "durationMinutes", durationMinutes,
+                        "reason", reason != null ? reason : ""
+                )
+        ));
+
+        return saved;
+    }
+
+    @Transactional
+    public void removeTimeout(UUID requesterId, UUID serverId, UUID targetId) {
+        if (!permissionService.can(requesterId, null, serverId, Permissions.TIMEOUT_MEMBERS)) {
+            throw new ForbiddenException("You don't have permission to remove timeouts.");
+        }
+
+        Member member = memberRepository.findByIdServerAndIdUser(serverId, targetId)
+                .orElseThrow(() -> new NotFoundException("Member not found."));
+
+        member.setStTimeout(false);
+        member.setDtTimeoutExpires(null);
+        memberRepository.save(member);
+
+        chatHandler.sendToUser(targetId, Map.of(
+                "type", "MEMBER_TIMEOUT_REMOVED",
+                "data", Map.of("serverId", serverId)
+        ));
+    }
+
+    @Scheduled(fixedDelay = 60000) // Run every minute
+    @Transactional
+    public void expireTimeouts() {
+        int expired = memberRepository.expireTimeouts(OffsetDateTime.now());
+    }
+
+    @Transactional
+    public Member changeNickname(UUID serverId, UUID targetUserId, UUID requesterId, String nickname) {
+        Server server = serverRepository.findById(serverId)
+                .orElseThrow(() -> new NotFoundException("Server not found."));
+
+        // Check permission - users can change their own nickname, or mods can change others
+        boolean isSelf = targetUserId.equals(requesterId);
+        boolean canManage = permissionService.can(requesterId, null, serverId, Permissions.MANAGE_NICKNAMES);
+
+        if (!isSelf && !canManage) {
+            throw new ForbiddenException("You don't have permission to change other members' nicknames.");
+        }
+
+        // Check role hierarchy if changing someone else's nickname
+        if (!isSelf) {
+            assertRoleHierarchy(requesterId, targetUserId, serverId);
+        }
+
+        Member member = memberRepository.findByIdServerAndIdUser(serverId, targetUserId)
+                .orElseThrow(() -> new NotFoundException("Member not found."));
+
+        // Validate nickname length
+        if (nickname != null && (nickname.length() < 1 || nickname.length() > 50)) {
+            throw new AccordException("Nickname must be between 1 and 50 characters.");
+        }
+
+        member.setDsNickname(nickname);
+        Member saved = memberRepository.save(member);
+
+        // Broadcast nickname change via WebSocket
+        chatHandler.broadcastToChannel(serverId, Map.of(
+                "type", "MEMBER_NICKNAME_CHANGE",
+                "data", Map.of(
+                        "serverId", serverId,
+                        "userId", targetUserId,
+                        "nickname", nickname
+                )
+        ));
+
+        return saved;
+    }
+
     // ── Ban / Unban — delegate to BanService ──────────────────────────────────
 
     @Transactional
@@ -196,9 +321,19 @@ public class ServerService {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void assertRoleHierarchy(UUID requesterId, UUID targetId, UUID serverId) {
+        Server server = serverRepository.findById(serverId)
+                .orElseThrow(() -> new NotFoundException("Server not found."));
+
+        // Server owner can kick anyone
+        if (server.getIdOwner().equals(requesterId)) {
+            return;
+        }
+
         short requesterTop = memberRepository.getHighestRolePosition(requesterId, serverId);
         short targetTop    = memberRepository.getHighestRolePosition(targetId,    serverId);
-        if (requesterTop <= targetTop) {
+
+        // Requester needs STRICTLY HIGHER priority (LOWER number)
+        if (requesterTop >= targetTop) {
             throw new ForbiddenException("You cannot action someone with an equal or higher role.");
         }
     }

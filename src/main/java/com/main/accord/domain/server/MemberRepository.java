@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,4 +33,10 @@ public interface MemberRepository extends JpaRepository<Member, Member.MemberId>
     @Modifying
     @Query("DELETE FROM Member m WHERE m.idServer = :serverId AND m.idUser = :userId")
     void deleteByIdServerAndIdUser(UUID serverId, UUID userId);
+
+    @Modifying
+    @Query("UPDATE Member m SET m.stTimeout = false, m.dtTimeoutExpires = null " +
+            "WHERE m.stTimeout = true AND m.dtTimeoutExpires < :now")
+    int expireTimeouts(OffsetDateTime now);
+
 }

@@ -22,4 +22,6 @@ public final class Permissions {
     public static final long MANAGE_CHANNELS      = 1L << 16;
     public static final long MANAGE_SERVER        = 1L << 17;
     public static final long ADMINISTRATOR        = 1L << 18;  // bypasses all overrides
+    public static final long TIMEOUT_MEMBERS      = 1L << 19; // 524288
+    public static final long MANAGE_NICKNAMES     = 1L << 20; // 1048576
 }
