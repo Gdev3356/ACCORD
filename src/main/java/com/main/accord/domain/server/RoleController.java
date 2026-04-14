@@ -1,6 +1,7 @@
 package com.main.accord.domain.server;
 
 import com.main.accord.common.ApiResponse;
+import com.main.accord.common.ForbiddenException;
 import com.main.accord.security.AccordPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,8 @@ import java.util.UUID;
 public class RoleController {
 
     private final RoleService roleService;
+    private final MemberRepository memberRepository;
+    private final MemberRoleRepository memberRoleRepository;
 
     // GET /api/v1/servers/{serverId}/roles
     @GetMapping
@@ -75,6 +78,19 @@ public class RoleController {
 
         roleService.assignRole(serverId, userId, roleId, principal.userId());
         return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // GET /api/v1/servers/{serverId}/roles/members/{userId}
+    @GetMapping("/members/{userId}")
+    public ResponseEntity<ApiResponse<List<Role>>> getMemberRoles(
+            @PathVariable UUID serverId,
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        if (!memberRepository.existsByIdServerAndIdUser(serverId, principal.userId()))
+            throw new ForbiddenException("Not a member.");
+        return ResponseEntity.ok(ApiResponse.ok(
+                memberRoleRepository.findRolesByMember(userId, serverId)
+        ));
     }
 
     // DELETE /api/v1/servers/{serverId}/roles/{roleId}/members/{userId}
