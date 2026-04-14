@@ -37,7 +37,14 @@ public class MessageController {
             @AuthenticationPrincipal AccordPrincipal principal) {
 
         return ResponseEntity.ok(ApiResponse.ok(
-                messageService.sendMessage(channelId, principal.userId(), req.content())
+                messageService.sendMessage(
+                        channelId,
+                        principal.userId(),
+                        req.content(),
+                        req.replyToId(),
+                        req.tpMessage(),
+                        req.jsActivity()
+                )
         ));
     }
 
@@ -63,6 +70,11 @@ public class MessageController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    public record SendMessageRequest(@jakarta.validation.constraints.NotBlank String content) {}
+    public record SendMessageRequest(
+            String content,
+            UUID replyToId,
+            String tpMessage,
+            java.util.Map<String, Object> jsActivity
+    ) {}
     public record EditMessageRequest(@jakarta.validation.constraints.NotBlank String content) {}
 }

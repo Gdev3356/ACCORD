@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -39,4 +40,17 @@ public class Message {
 
     @Column(name = "DT_EDITED")
     private OffsetDateTime dtEdited;
+
+    @OneToMany(fetch = FetchType.EAGER)
+    @JoinColumn(name = "ID_MESSAGE", referencedColumnName = "ID_MESSAGE",
+            insertable = false, updatable = false)
+    private List<MsAttachment> attachments = new java.util.ArrayList<>();
+
+    @Builder.Default
+    @Column(name = "TP_MESSAGE", nullable = false, length = 20)
+    private String tpMessage = "text";
+
+    @Column(name = "JS_ACTIVITY", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private java.util.Map<String, Object> jsActivity;
 }

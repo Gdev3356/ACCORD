@@ -2,6 +2,8 @@ package com.main.accord.domain.message;
 
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.channel.ChReadState;
+import com.main.accord.domain.channel.ChReadStateRepository;
 import com.main.accord.domain.channel.Channel;
 import com.main.accord.domain.channel.ChannelRepository;
 import com.main.accord.domain.server.BanService;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -33,47 +36,48 @@ public class MessageService {
     private final NotificationService   notificationService;
     private final BanService            banService;
     private final MsAttachmentRepository msAttachmentRepository;
+    private final ChReadStateRepository chReadStateRepository;
 
     @Transactional
-    public Message sendMessage(UUID channelId, UUID authorId, String content) {
-        // Platform ban check — rejected before anything else
-        if (banService.isPlatformBanned(authorId)) {
+    public Message sendMessage(UUID channelId, UUID authorId, String content,
+                               UUID replyToId, String tpMessage,
+                               Map<String, Object> jsActivity) {
+        if (banService.isPlatformBanned(authorId))
             throw new ForbiddenException("Your account has been suspended.");
-        }
 
         Channel channel = channelRepository.findById(channelId)
                 .orElseThrow(() -> new NotFoundException("Channel not found."));
 
-        // Server ban check
-        if (banService.isServerBanned(authorId, channel.getIdServer())) {
+        if (banService.isServerBanned(authorId, channel.getIdServer()))
             throw new ForbiddenException("You are banned from this server.");
-        }
 
-        if (!permissionService.can(authorId, channelId, channel.getIdServer(), Permissions.SEND_MESSAGES)) {
+        if (!permissionService.can(authorId, channelId, channel.getIdServer(), Permissions.SEND_MESSAGES))
             throw new ForbiddenException("You can't send messages here.");
-        }
 
-        // Parse and resolve mentions
         MentionParser.MentionResult mentions = mentionParser.parse(
-                content, authorId, channelId, channel.getIdServer()
+                content != null ? content : "", authorId, channelId, channel.getIdServer()
         );
+
+        String encryptedContent = content != null ? encryptionService.encrypt(mentions.sanitizedContent()) : null;
 
         Message saved = messageRepository.save(
                 Message.builder()
                         .idChannel(channelId)
                         .idAuthor(authorId)
-                        .dsContent(encryptionService.encrypt(mentions.sanitizedContent()))
+                        .idReplyTo(replyToId)
+                        .dsContent(encryptedContent)
+                        .tpMessage(tpMessage != null ? tpMessage : "text")
+                        .jsActivity(jsActivity)
                         .build()
         );
 
-        messageRepository.updateSearchVector(saved.getIdMessage(), mentions.sanitizedContent());
+        if (content != null && !content.isBlank())
+            messageRepository.updateSearchVector(saved.getIdMessage(), mentions.sanitizedContent());
 
-        // Broadcast the message — send decrypted content over WS, not the ciphertext
-        Message broadcast = cloneWithDecryptedContent(saved, mentions.sanitizedContent());
+        Message broadcast = cloneWithDecryptedContent(saved, content);
         chatHandler.broadcastToChannel(channelId, broadcast);
 
-        // Fire mention notifications asynchronously
-        if (!mentions.mentionedUserIds().isEmpty()) {
+        if (mentions.mentionedUserIds() != null && !mentions.mentionedUserIds().isEmpty()) {
             notificationService.dispatchMentionNotifications(
                     saved, mentions, channel.getIdServer(), authorId
             );
@@ -142,6 +146,30 @@ public class MessageService {
     }
 
     @Transactional
+    public void markRead(UUID channelId, UUID userId, UUID lastMessageId) {
+        Channel channel = channelRepository.findById(channelId)
+                .orElseThrow(() -> new NotFoundException("Channel not found."));
+        if (!permissionService.can(userId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
+            throw new ForbiddenException("You don't have access to this channel.");
+
+        ChReadState state = chReadStateRepository
+                .findByIdChannelAndIdUser(channelId, userId)
+                .orElse(ChReadState.builder().idChannel(channelId).idUser(userId).build());
+        state.setIdLastReadMsg(lastMessageId);
+        state.setDtLastRead(java.time.OffsetDateTime.now());
+        chReadStateRepository.save(state);
+    }
+
+    public java.util.Map<UUID, Long> getUnreadCounts(UUID serverId, UUID userId) {
+        return chReadStateRepository.countUnreadPerChannelInServer(serverId, userId)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> UUID.fromString(row[0].toString()),
+                        row -> ((Number) row[1]).longValue()
+                ));
+    }
+
+    @Transactional
     public void deleteMessage(UUID messageId, UUID requesterId) {
         Message msg = messageRepository.findById(messageId)
                 .orElseThrow(() -> new NotFoundException("Message not found."));
@@ -174,6 +202,9 @@ public class MessageService {
         copy.setStDeleted(source.getStDeleted());
         copy.setDtCreated(source.getDtCreated());
         copy.setDtEdited(source.getDtEdited());
+        copy.setTpMessage(source.getTpMessage());
+        copy.setJsActivity(source.getJsActivity());
+        copy.setAttachments(source.getAttachments());
         return copy;
     }
 }
