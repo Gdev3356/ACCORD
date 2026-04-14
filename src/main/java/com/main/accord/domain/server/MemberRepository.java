@@ -39,4 +39,7 @@ public interface MemberRepository extends JpaRepository<Member, Member.MemberId>
             "WHERE m.stTimeout = true AND m.dtTimeoutExpires < :now")
     int expireTimeouts(OffsetDateTime now);
 
+
+    @Query("SELECT m FROM Member m WHERE m.stTimeout = true AND m.dtTimeoutExpires < :now")
+    List<Member> findExpiredTimeouts(OffsetDateTime now);
 }

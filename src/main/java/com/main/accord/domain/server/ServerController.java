@@ -8,6 +8,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -81,8 +82,11 @@ public class ServerController {
     public ResponseEntity<ApiResponse<Void>> kickMember(
             @PathVariable UUID serverId,
             @PathVariable UUID userId,
+            @RequestBody(required = false) Map<String, String> body,
             @AuthenticationPrincipal AccordPrincipal principal) {
-        serverService.kickMember(principal.userId(), serverId, userId);
+
+        String reason = body != null ? body.get("reason") : null;
+        serverService.kickMember(principal.userId(), serverId, userId, reason);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
