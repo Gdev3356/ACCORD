@@ -43,5 +43,9 @@ public class ChatHandler {
         broker.convertAndSendToUser(userId.toString(), "/queue/events", payload);
     }
 
+    public void broadcastEventToChannel(UUID channelId, ChatEvent event) {
+        broker.convertAndSend("/topic/channel." + channelId, event);
+    }
+
     public record ChatEvent(String type, Object data) {}
 }

@@ -177,7 +177,7 @@ public class MessageService {
         if (!permissionService.can(userId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
             throw new ForbiddenException("No access.");
 
-        chatHandler.broadcastToChannel(channelId,
+        chatHandler.broadcastEventToChannel(channelId,
                 new ChatHandler.ChatEvent("CHANNEL_TYPING", Map.of("userId", userId.toString())));
     }
 
