@@ -170,6 +170,15 @@ public class MessageService {
                 ));
     }
 
+    public void broadcastTyping(UUID channelId, UUID userId) {
+        Channel channel = channelRepository.findById(channelId)
+                .orElseThrow(() -> new NotFoundException("Channel not found."));
+        if (!permissionService.can(userId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
+            throw new ForbiddenException("No access.");
+        chatHandler.broadcastToChannel(channelId,
+                Map.of("type", "CHANNEL_TYPING", "data", Map.of("userId", userId.toString())));
+    }
+
     @Transactional
     public void deleteMessage(UUID messageId, UUID requesterId) {
         Message msg = messageRepository.findById(messageId)

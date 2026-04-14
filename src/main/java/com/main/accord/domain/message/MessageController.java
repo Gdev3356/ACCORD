@@ -60,6 +60,14 @@ public class MessageController {
         ));
     }
 
+    @PostMapping("/typing")   // → POST /api/v1/channels/{channelId}/typing
+    public ResponseEntity<ApiResponse<Void>> typing(
+            @PathVariable UUID channelId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        messageService.broadcastTyping(channelId, principal.userId());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
     @DeleteMapping("/{messageId}")
     public ResponseEntity<ApiResponse<Void>> deleteMessage(
             @PathVariable UUID channelId,
