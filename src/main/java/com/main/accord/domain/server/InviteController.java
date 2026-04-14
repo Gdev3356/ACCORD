@@ -3,14 +3,13 @@ package com.main.accord.domain.server;
 import com.main.accord.common.ApiResponse;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 import java.util.UUID;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
@@ -63,13 +62,9 @@ public class InviteController {
     public ResponseEntity<ApiResponse<Invite>> joinByCode(
             @PathVariable String code,
             @AuthenticationPrincipal AccordPrincipal principal) {
-        try {
-            return ResponseEntity.ok(ApiResponse.ok(
-                    inviteService.joinByCode(principal.userId(), code)
-            ));
-        } catch (Exception e) {
-            log.error("Error joining with code {}: {}", code, e.getMessage(), e);
-            throw e;
-        }
+
+        return ResponseEntity.ok(ApiResponse.ok(
+                inviteService.joinByCode(principal.userId(), code)
+        ));
     }
 }
