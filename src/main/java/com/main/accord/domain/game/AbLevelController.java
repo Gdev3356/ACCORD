@@ -27,7 +27,7 @@ public class AbLevelController {
      *      Defaults to page 0 if the param is absent.
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<AbLevel>>> list(
+    public ResponseEntity<ApiResponse<List<AbLevelSummary>>> list(
             @RequestParam(defaultValue = "0") int page) {
         return ResponseEntity.ok(ApiResponse.ok(levelService.getPublished(page)));
     }
@@ -175,6 +175,14 @@ public class AbLevelController {
                 levelService.reviewReport(principal.userId(), reportId, req.action())));
     }
 
+    // GET /api/v1/ab/levels/{levelId}/my-vote
+    @GetMapping("/{levelId}/my-vote")
+    public ResponseEntity<ApiResponse<Boolean>> getMyVote(
+            @PathVariable UUID levelId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                levelService.getMyVote(principal.userId(), levelId)));
+    }
     // ── Request records ───────────────────────────────────────────────────────
 
     public record ScoreRequest(int score, short stars) {}

@@ -127,8 +127,8 @@ public class AbLevelService {
     // FIX: returns a bounded page instead of the entire table; callers that
     //      previously used getPublished() must now pass a page number.
     @Transactional(readOnly = true)
-    public List<AbLevel> getPublished(int page) {
-        return levelRepository.findAllPublished(PageRequest.of(page, PUBLISHED_PAGE_SIZE));
+    public List<AbLevelSummary> getPublished(int page) {
+        return levelRepository.findAllPublishedSummaries(PageRequest.of(page, PUBLISHED_PAGE_SIZE));
     }
 
     @Transactional(readOnly = true)
@@ -224,6 +224,13 @@ public class AbLevelService {
                     "Someone upvoted \"" + level.getDsName() + "\".",
                     Map.of("levelId", levelId.toString(), "voterId", userId.toString()));
         }
+    }
+
+    @Transactional(readOnly = true)
+    public Boolean getMyVote(UUID userId, UUID levelId) {
+        return voteRepository.findByIdLevelAndIdUser(levelId, userId)
+                .map(AbLevelVote::getStUpvote)
+                .orElse(null); // null = no vote, true = up, false = down
     }
 
     // ── Comments ──────────────────────────────────────────────────────────────
@@ -346,10 +353,22 @@ public class AbLevelService {
                 playerAchievementRepository.save(GmPlayerAchievement.builder()
                         .idUser(userId).idAchievement(ach.getIdAchievement()).build());
 
+                // Persist the notification as before
                 _notify(userId, NotifType.achievement_unlocked,
                         "Achievement Unlocked: " + ach.getDsTitle(),
                         ach.getDsDesc(),
                         Map.of("achievementKey", key));
+
+                // Dedicated event so the frontend toast has everything it needs
+                chatHandler.sendToUser(userId, Map.of(
+                        "type", "ACHIEVEMENT_UNLOCKED",
+                        "data", Map.of(
+                                "dsKey",     ach.getDsKey(),
+                                "dsTitle",   ach.getDsTitle(),
+                                "dsDesc",    ach.getDsDesc()    != null ? ach.getDsDesc()    : "",
+                                "dsIconUrl", ach.getDsIconUrl() != null ? ach.getDsIconUrl() : ""
+                        )
+                ));
             }
         });
     }
