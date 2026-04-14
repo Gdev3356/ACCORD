@@ -3,6 +3,8 @@ package com.main.accord.domain.channel;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -32,6 +34,7 @@ public class Channel {
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "TP_CHANNEL", nullable = false, columnDefinition = "channel_type")
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     private ChannelType tpChannel = ChannelType.text;
 
     @Builder.Default @Column(name = "NR_POSITION")  private Short   nrPosition = 0;
