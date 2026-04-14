@@ -42,6 +42,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()          // login, register, refresh
                         .requestMatchers(HttpMethod.GET, "/api/v1/invites/*").permitAll()
                         //.requestMatchers("/api/admin/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/ab/levels").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/ab/levels/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/ab/levels/*/leaderboard").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .anyRequest().authenticated()
                 )
