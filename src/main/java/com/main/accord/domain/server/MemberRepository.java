@@ -3,6 +3,7 @@ package com.main.accord.domain.server;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -42,4 +43,7 @@ public interface MemberRepository extends JpaRepository<Member, Member.MemberId>
 
     @Query("SELECT m FROM Member m WHERE m.stTimeout = true AND m.dtTimeoutExpires < :now")
     List<Member> findExpiredTimeouts(OffsetDateTime now);
+
+    @Query("SELECT m.idUser FROM Member m WHERE m.idServer = :serverId")
+    List<UUID> findUserIdsByServerId(@Param("serverId") UUID serverId);
 }
