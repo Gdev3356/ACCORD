@@ -7,6 +7,7 @@ import com.main.accord.domain.account.Account;
 import com.main.accord.domain.account.AccountRepository;
 import com.main.accord.domain.account.Visuals;
 import com.main.accord.domain.account.VisualsRepository;
+import com.main.accord.domain.message.MsAttachmentRepository;
 import com.main.accord.domain.notification.NotifType;
 import com.main.accord.domain.notification.NotificationService;
 import com.main.accord.security.EncryptionService;
@@ -38,6 +39,7 @@ public class DmService {
     private final VisualsRepository visualsRepository;
     private final DmAttachmentRepository dmAttachmentRepository;
     private final EncryptionService encryptionService;
+    private final MsAttachmentRepository msAttachmentRepository;
 
     public List<Conversation> getConversations(UUID userId) {
         return conversationRepository.findAllByParticipant(userId);
@@ -322,6 +324,11 @@ public class DmService {
         return broadcast;
     }
 
+    @Transactional                    // separate write transaction
+    public void touchAttachments(List<UUID> messageIds) {
+        if (!messageIds.isEmpty())
+            msAttachmentRepository.touchByMessageIds(messageIds, ZonedDateTime.now());
+    }
 
     @Transactional
     public void markRead(UUID conversationId, UUID userId, UUID lastMessageId) {

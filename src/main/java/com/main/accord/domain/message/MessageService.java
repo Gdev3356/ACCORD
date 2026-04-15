@@ -94,36 +94,31 @@ public class MessageService {
         return broadcast;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public List<Message> getMessages(UUID channelId, UUID requesterId, UUID beforeId, int limit) {
         Channel channel = channelRepository.findById(channelId)
                 .orElseThrow(() -> new NotFoundException("Channel not found."));
 
-        if (!permissionService.can(requesterId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS)) {
+        if (!permissionService.can(requesterId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
             throw new ForbiddenException("You don't have access to this channel.");
-        }
 
         PageRequest page = PageRequest.of(0, Math.min(limit, 100));
         List<Message> messages = beforeId != null
                 ? messageRepository.findBeforeMessage(channelId, beforeId, page)
                 : messageRepository.findByChannel(channelId, page);
 
-        messages.forEach(m -> {
-            if (m.getDsContent() != null) {
-                try {
-                    m.setDsContent(encryptionService.decrypt(m.getDsContent()));
-                } catch (Exception e) {
-                    // Plaintext legacy message — leave as-is
-                }
+        // Decrypt into NEW objects — never mutate managed entities
+        List<Message> result = messages.stream().map(m -> {
+            if (m.getDsContent() == null) return m;
+            try {
+                Message copy = cloneWithDecryptedContent(m, encryptionService.decrypt(m.getDsContent()));
+                return copy;
+            } catch (Exception e) {
+                return m; // legacy plaintext
             }
-        });
+        }).toList();
 
-        List<UUID> ids = messages.stream().map(Message::getIdMessage).toList();
-        if (!ids.isEmpty()) {
-            msAttachmentRepository.touchByMessageIds(ids, ZonedDateTime.now());
-        }
-
-        return messages;
+        return result;
     }
 
     @Transactional
