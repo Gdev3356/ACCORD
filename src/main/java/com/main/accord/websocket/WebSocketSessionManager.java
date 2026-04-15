@@ -70,6 +70,15 @@ public class WebSocketSessionManager {
     @EventListener
     public void handleSessionUnsubscribe(SessionUnsubscribeEvent event) {
         String sessionId = event.getMessage().getHeaders().get("simpSessionId", String.class);
+
+        if (sessionId != null && activeSessions.containsKey(sessionId)) {
+            activeSessions.put(sessionId, new SessionInfo(
+                    sessionId,
+                    activeSessions.get(sessionId).connectedAt(),
+                    System.currentTimeMillis()  // ← refresh heartbeat
+            ));
+        }
+
         log.debug("UNSUBSCRIBE - Session: {}", sessionId);
     }
 
@@ -77,7 +86,7 @@ public class WebSocketSessionManager {
     @Scheduled(fixedDelay = 60000) // 1 minute
     public void cleanupStaleSessions() {
         long now = System.currentTimeMillis();
-        long staleThreshold = now - (3 * 60 * 1000); // 3 minutes without activity
+        long staleThreshold = now - (10 * 60 * 1000); // 3 minutes without activity
 
         int removed = 0;
         var iterator = activeSessions.entrySet().iterator();
