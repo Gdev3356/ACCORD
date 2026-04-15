@@ -3,6 +3,7 @@ package com.main.accord.domain.server;
 import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.channel.ChReadStateRepository;
 import com.main.accord.domain.notification.NotifType;
 import com.main.accord.domain.notification.NotificationService;
 import com.main.accord.permission.PermissionService;
@@ -17,6 +18,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +32,7 @@ public class ServerService {
     private final PermissionService permissionService;
     private final ChatHandler       chatHandler;
     private final NotificationService notificationService;
+    private final ChReadStateRepository chReadStateRepository;
 
     // ── List ──────────────────────────────────────────────────────────────────
 
@@ -399,6 +402,27 @@ public class ServerService {
         return inviteService.joinByCode(userId, code);
     }
 
+    public List<ServerSummaryDto> getServerSummaries(UUID userId) {
+        List<Server> servers = serverRepository.findByMember(userId);
+        if (servers.isEmpty()) return List.of();
+
+        List<UUID> serverIds = servers.stream().map(Server::getIdServer).toList();
+
+        Map<UUID, Long> unreadMap = chReadStateRepository
+                .countUnreadPerServer(userId, serverIds).stream()
+                .collect(Collectors.toMap(
+                        row -> UUID.fromString(row[0].toString()),
+                        row -> ((Number) row[1]).longValue()
+                ));
+
+        return servers.stream().map(s -> ServerSummaryDto.builder()
+                .idServer(s.getIdServer())
+                .dsName(s.getDsName())
+                .dsIconUrl(s.getDsIconUrl())
+                .nrUnread(unreadMap.getOrDefault(s.getIdServer(), 0L))
+                .build()
+        ).toList();
+    }
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void assertRoleHierarchy(UUID requesterId, UUID targetId, UUID serverId) {

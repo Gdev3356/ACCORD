@@ -33,4 +33,22 @@ public interface ChReadStateRepository extends JpaRepository<ChReadState, ChRead
     List<Object[]> countUnreadPerChannelInServer(
             @Param("serverId") UUID serverId,
             @Param("userId")   UUID userId);
+
+
+    @Query(value = """
+    SELECT c.id_server, COUNT(m.id_message)
+    FROM ms_message m
+    JOIN ms_channel c ON c.id_channel = m.id_channel
+    LEFT JOIN ch_read_state r
+        ON r.id_channel = m.id_channel
+        AND r.id_user = :userId
+    WHERE c.id_server IN :serverIds
+      AND m.st_deleted = false
+      AND (r.dt_last_read IS NULL OR m.dt_created > r.dt_last_read)
+    GROUP BY c.id_server
+""", nativeQuery = true)
+    List<Object[]> countUnreadPerServer(
+            @Param("userId")    UUID userId,
+            @Param("serverIds") List<UUID> serverIds
+    );
 }

@@ -172,6 +172,12 @@ public class ServerController {
         return ResponseEntity.ok(ApiResponse.ok(member));
     }
 
+    @GetMapping("/summaries")
+    public ResponseEntity<ApiResponse<List<ServerSummaryDto>>> getSummaries(
+            @RequestAttribute UUID userId) {
+        return ResponseEntity.ok(ApiResponse.ok(serverService.getServerSummaries(userId)));
+    }
+
     @PatchMapping("/{serverId}/members/{userId}/nickname")
     public ResponseEntity<ApiResponse<Member>> changeNickname(
             @PathVariable UUID serverId,
