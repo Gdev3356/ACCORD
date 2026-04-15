@@ -155,7 +155,12 @@ public class InviteService {
                                 )
                         ))
                 );
-
+        chatHandler.sendToUser(userId, Map.of(
+                "type", "MEMBER_JOIN",
+                "data", Map.of(
+                        "userId", userId.toString()
+                )
+        ));
         return invite;
     }
 

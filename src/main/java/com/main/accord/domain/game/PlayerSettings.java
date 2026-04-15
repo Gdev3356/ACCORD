@@ -9,24 +9,21 @@ import org.hibernate.type.SqlTypes;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Entity
 @Table(name = "GM_PLAYER_SETTINGS")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@IdClass(PlayerSettingsId.class)
 public class PlayerSettings {
 
-    @EmbeddedId
-    private PlayerSettingsId id;
+    @Id
+    @Column(name = "ID_USER", nullable = false)
+    private UUID idUser;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("idUser")
-    @JoinColumn(name = "ID_USER")
-    private Account account;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("idGame")
-    @JoinColumn(name = "ID_GAME")
-    private GmGame game;
+    @Id
+    @Column(name = "DS_GAME", nullable = false, length = 50)
+    private String dsGame;
 
     @Builder.Default
     @JdbcTypeCode(SqlTypes.JSON)

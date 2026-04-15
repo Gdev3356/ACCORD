@@ -38,9 +38,4 @@ public class PlayerSettingsController {
                 playerSettingsService.patchSettings(principal.userId(), gameSlug, patch)
         ));
     }
-
-    @GetMapping("/ping")
-    public ResponseEntity<String> ping() {
-        return ResponseEntity.ok("pong");
-    }
 }

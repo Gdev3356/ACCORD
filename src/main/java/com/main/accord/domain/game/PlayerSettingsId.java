@@ -10,10 +10,9 @@ import java.util.UUID;
 @Embeddable
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode
 public class PlayerSettingsId implements Serializable {
-
     @Column(name = "ID_USER")
     private UUID idUser;
 
-    @Column(name = "ID_GAME")
-    private UUID idGame;
+    @Column(name = "DS_GAME")
+    private String dsGame;
 }

@@ -18,27 +18,21 @@ import java.util.UUID;
 public class PlayerSettingsService {
 
     private final PlayerSettingsRepository settingsRepository;
-    private final GmGameRepository         gameRepository;
-    private final AccountRepository         accountRepository;
+    private final AccountRepository accountRepository;
 
     // ── Validators registry ───────────────────────────────────────────────────
 
-    /**
-     * Per-game validator: checks allowed keys and value types.
-     * Add a new implementation for each game slug.
-     */
     public interface GameSettingsValidator {
         String gameSlug();
-        void validate(Map<String, Object> patch);   // throws AccordException on bad input
+        void validate(Map<String, Object> patch);
     }
 
-    // Angry Birds — only known keys are accepted; values are type-checked.
     @org.springframework.stereotype.Component
     static class AbSettingsValidator implements GameSettingsValidator {
 
         private static final Set<String> ALLOWED_KEYS = Set.of(
                 "audioEnabled",
-                "volume"        // reserved for future use
+                "volume"
         );
 
         @Override public String gameSlug() { return "ab"; }
@@ -63,8 +57,6 @@ public class PlayerSettingsService {
         }
     }
 
-    // ── Constructor injection of all validators ───────────────────────────────
-
     private final java.util.List<GameSettingsValidator> validators;
 
     private GameSettingsValidator validatorFor(String slug) {
@@ -77,8 +69,7 @@ public class PlayerSettingsService {
     // ── Public API ────────────────────────────────────────────────────────────
 
     public Map<String, Object> getSettings(UUID userId, String gameSlug) {
-        return settingsRepository
-                .findByIdIdUserAndGameDsSlug(userId, gameSlug)
+        return settingsRepository.findByIdIdUserAndDsGame(userId, gameSlug)
                 .map(PlayerSettings::getJsSettings)
                 .orElse(Map.of());
     }
@@ -93,25 +84,20 @@ public class PlayerSettingsService {
         // 1. Validate keys + value types for this game
         validatorFor(gameSlug).validate(patch);
 
-        // 2. Resolve game + account (both must exist)
-        GmGame game = gameRepository.findByDsSlug(gameSlug)
-                .orElseThrow(() -> new NotFoundException("Game not found: " + gameSlug));
-
+        // 2. Verify account exists
         accountRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found."));
 
-        // 3. Upsert with merge semantics
-        PlayerSettingsId pk = new PlayerSettingsId(userId, game.getIdGame());
-
-        PlayerSettings settings = settingsRepository.findById(pk)
+        // 3. Upsert with merge semantics (using String gameSlug, not UUID)
+        PlayerSettings settings = settingsRepository
+                .findByIdIdUserAndDsGame(userId, gameSlug)
                 .orElseGet(() -> PlayerSettings.builder()
-                        .id(pk)
-                        .account(accountRepository.getReferenceById(userId))
-                        .game(game)
+                        .idUser(userId)
+                        .dsGame(gameSlug)
                         .jsSettings(new HashMap<>())
                         .build());
 
-        settings.getJsSettings().putAll(patch);   // merge, not replace
+        settings.getJsSettings().putAll(patch);
         settings.setDtUpdated(OffsetDateTime.now());
 
         return settingsRepository.save(settings).getJsSettings();
