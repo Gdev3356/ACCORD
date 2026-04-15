@@ -161,6 +161,10 @@ public class MessageService {
         if (!permissionService.can(userId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
             throw new ForbiddenException("You don't have access to this channel.");
 
+        if (lastMessageId != null && !messageRepository.existsById(lastMessageId)) {
+            // Message not yet committed, skip or retry
+            return;
+        }
         ChReadState state = chReadStateRepository
                 .findByIdChannelAndIdUser(channelId, userId)
                 .orElse(ChReadState.builder().idChannel(channelId).idUser(userId).build());

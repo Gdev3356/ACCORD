@@ -16,7 +16,7 @@ public class PlayerSettingsController {
 
     private final PlayerSettingsService playerSettingsService;
 
-    // GET /api/v1/games/absettings
+    // GET /api/v1/games/ab/settings
     @GetMapping
     public ResponseEntity<ApiResponse<Map<String, Object>>> getSettings(
             @PathVariable String gameSlug,
@@ -37,5 +37,10 @@ public class PlayerSettingsController {
         return ResponseEntity.ok(ApiResponse.ok(
                 playerSettingsService.patchSettings(principal.userId(), gameSlug, patch)
         ));
+    }
+
+    @GetMapping("/ping")
+    public ResponseEntity<String> ping() {
+        return ResponseEntity.ok("pong");
     }
 }
