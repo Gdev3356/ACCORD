@@ -205,6 +205,31 @@ public class MessageService {
         return true;
     }
 
+    public List<Message> searchMessages(UUID channelId, UUID requesterId, String query, int limit) {
+        Channel channel = channelRepository.findById(channelId)
+                .orElseThrow(() -> new NotFoundException("Channel not found."));
+
+        if (!permissionService.can(requesterId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
+            throw new ForbiddenException("You don't have access to this channel.");
+
+        if (query == null || query.trim().isEmpty()) {
+            return List.of();
+        }
+
+        List<Message> msgs = messageRepository.fullTextSearch(channelId, query, Math.min(limit, 100));
+
+        // Decrypt each result — same pattern as getMessages()
+        return msgs.stream().map(m -> {
+            if (m.getDsContent() == null) return m;
+            try {
+                Message copy = cloneWithDecryptedContent(m, encryptionService.decrypt(m.getDsContent()));
+                return copy;
+            } catch (Exception e) {
+                return m; // legacy plaintext
+            }
+        }).toList();
+    }
+
     @Transactional
     public void deleteMessage(UUID messageId, UUID requesterId) {
         Message msg = messageRepository.findById(messageId)

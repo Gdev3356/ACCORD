@@ -68,6 +68,17 @@ public class MessageController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<List<Message>>> searchMessages(
+            @PathVariable UUID channelId,
+            @RequestParam String q,
+            @RequestParam(defaultValue = "50") int limit,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                messageService.searchMessages(channelId, principal.userId(), q, limit)
+        ));
+    }
+
     @DeleteMapping("/{messageId}")
     public ResponseEntity<ApiResponse<Void>> deleteMessage(
             @PathVariable UUID channelId,
