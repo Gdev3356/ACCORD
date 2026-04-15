@@ -243,24 +243,12 @@ public class ReactionService {
         }
 
         // Broadcast with full identity
-        String displayNickname = member.getDsNickname() != null ? member.getDsNickname() : account.getDsDisplayName();
-
-        chatHandler.broadcastToChannel(
-                actualChannelId,
-                Map.of(
-                        "type", "MESSAGE_REACTION_ADD",
-                        "data", Map.of(
-                                "messageId", messageId,
-                                "userId", userId,
-                                "emoji", emoji,
-                                "reactor", Map.of(
-                                        "idUser", userId,
-                                        "displayName", account.getDsDisplayName(),
-                                        "nickname", displayNickname,
-                                        "pfpUrl", pfpUrl
-                                )
-                        )
-                )
+        chatHandler.broadcastEventToChannel(channelId,
+                new ChatHandler.ChatEvent("MESSAGE_REACTION_ADD", Map.of(
+                        "messageId", messageId.toString(),
+                        "emoji",     emoji,
+                        "userId",    userId.toString()
+                ))
         );
     }
 
@@ -268,16 +256,12 @@ public class ReactionService {
     public void removeServerReaction(UUID messageId, UUID channelId, UUID userId, String emoji) {
         reactionRepository.deleteByIdMessageAndIdUserAndDsEmoji(messageId, userId, emoji);
 
-        chatHandler.broadcastToChannel(
-                channelId,
-                Map.of(
-                        "type", "MESSAGE_REACTION_REMOVE",
-                        "data", Map.of(
-                                "messageId", messageId,
-                                "userId", userId,
-                                "emoji", emoji
-                        )
-                )
+        chatHandler.broadcastEventToChannel(channelId,
+                new ChatHandler.ChatEvent("MESSAGE_REACTION_REMOVE", Map.of(
+                        "messageId", messageId.toString(),
+                        "emoji",     emoji,
+                        "userId",    userId.toString()
+                ))
         );
     }
 
