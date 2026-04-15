@@ -1,6 +1,5 @@
 package com.main.accord.websocket;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -17,23 +16,23 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 @Component
 @EnableScheduling
-@RequiredArgsConstructor
 public class WebSocketSessionManager {
 
-    // Track active sessions with timestamps
-    private final ConcurrentHashMap<String, Long> activeSessions = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, SessionInfo> activeSessions = new ConcurrentHashMap<>();
     private final AtomicInteger totalConnections = new AtomicInteger(0);
-    private final AtomicInteger currentConnections = new AtomicInteger(0);
+
+    record SessionInfo(String sessionId, long connectedAt, long lastHeartbeat) {}
 
     @EventListener
     public void handleSessionConnected(SessionConnectEvent event) {
         String sessionId = event.getMessage().getHeaders().get("simpSessionId", String.class);
-        if (sessionId != null) {
-            activeSessions.put(sessionId, System.currentTimeMillis());
-            int current = currentConnections.incrementAndGet();
+        if (sessionId != null && !activeSessions.containsKey(sessionId)) {
+            activeSessions.put(sessionId, new SessionInfo(sessionId, System.currentTimeMillis(), System.currentTimeMillis()));
             int total = totalConnections.incrementAndGet();
-            log.info("WebSocket connected - Session: {}, Current active: {}, Total: {}",
-                    sessionId, current, total);
+            log.info("WebSocket CONNECTED - Session: {}, Active: {}, Total: {}",
+                    sessionId, activeSessions.size(), total);
+        } else if (sessionId != null) {
+            log.warn("Duplicate CONNECT for session: {}", sessionId);
         }
     }
 
@@ -41,10 +40,13 @@ public class WebSocketSessionManager {
     public void handleSessionDisconnect(SessionDisconnectEvent event) {
         String sessionId = event.getSessionId();
         if (sessionId != null) {
-            activeSessions.remove(sessionId);
-            int current = currentConnections.decrementAndGet();
-            log.info("WebSocket disconnected - Session: {}, Current active: {}",
-                    sessionId, current);
+            SessionInfo removed = activeSessions.remove(sessionId);
+            if (removed != null) {
+                log.info("WebSocket DISCONNECTED - Session: {}, Active: {}, Duration: {}ms",
+                        sessionId, activeSessions.size(), System.currentTimeMillis() - removed.connectedAt());
+            } else {
+                log.warn("DISCONNECT for unknown session: {}", sessionId);
+            }
         }
     }
 
@@ -52,40 +54,52 @@ public class WebSocketSessionManager {
     public void handleSessionSubscribe(SessionSubscribeEvent event) {
         String sessionId = event.getMessage().getHeaders().get("simpSessionId", String.class);
         String destination = (String) event.getMessage().getHeaders().get("simpDestination");
-        log.debug("Subscription - Session: {}, Destination: {}", sessionId, destination);
+
+        // Update heartbeat
+        if (sessionId != null && activeSessions.containsKey(sessionId)) {
+            activeSessions.put(sessionId, new SessionInfo(
+                    sessionId,
+                    activeSessions.get(sessionId).connectedAt(),
+                    System.currentTimeMillis()
+            ));
+        }
+
+        log.debug("SUBSCRIBE - Session: {}, Destination: {}", sessionId, destination);
     }
 
     @EventListener
     public void handleSessionUnsubscribe(SessionUnsubscribeEvent event) {
         String sessionId = event.getMessage().getHeaders().get("simpSessionId", String.class);
-        log.debug("Unsubscription - Session: {}", sessionId);
+        log.debug("UNSUBSCRIBE - Session: {}", sessionId);
     }
 
-    // Clean up stale sessions every 5 minutes
-    @Scheduled(fixedDelay = 300000) // 5 minutes
+    // Clean up stale sessions every minute (more aggressive)
+    @Scheduled(fixedDelay = 60000) // 1 minute
     public void cleanupStaleSessions() {
         long now = System.currentTimeMillis();
-        long staleThreshold = now - (2 * 60 * 1000); // 2 minutes without activity
+        long staleThreshold = now - (3 * 60 * 1000); // 3 minutes without activity
 
         int removed = 0;
-        for (var entry : activeSessions.entrySet()) {
-            if (entry.getValue() < staleThreshold) {
-                log.warn("Found stale session: {}", entry.getKey());
+        var iterator = activeSessions.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            if (entry.getValue().lastHeartbeat() < staleThreshold) {
+                log.warn("Removing stale session: {} (last activity: {}ms ago)",
+                        entry.getKey(), now - entry.getValue().lastHeartbeat());
+                iterator.remove();
                 removed++;
             }
         }
 
         if (removed > 0) {
-            log.warn("Removed {} stale sessions (Note: sessions will clean up on disconnect)", removed);
+            log.warn("Cleaned up {} stale sessions, Active now: {}", removed, activeSessions.size());
         }
 
-        // Log current stats
-        log.debug("Session stats - Active: {}, Total connections: {}",
-                currentConnections.get(), totalConnections.get());
+        log.debug("Session stats - Active: {}, Total connections: {}", activeSessions.size(), totalConnections.get());
     }
 
     public int getCurrentConnections() {
-        return currentConnections.get();
+        return activeSessions.size();
     }
 
     public int getTotalConnections() {
