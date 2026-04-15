@@ -3,8 +3,6 @@ package com.main.accord.websocket;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
-import org.springframework.messaging.simp.SimpMessageSendingOperations;
-import org.springframework.messaging.simp.user.SimpUserRegistry;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -21,9 +19,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 @EnableScheduling
 @RequiredArgsConstructor
 public class WebSocketSessionManager {
-
-    private final SimpUserRegistry userRegistry;
-    private final SimpMessageSendingOperations messagingTemplate;
 
     // Track active sessions with timestamps
     private final ConcurrentHashMap<String, Long> activeSessions = new ConcurrentHashMap<>();
@@ -70,26 +65,23 @@ public class WebSocketSessionManager {
     @Scheduled(fixedDelay = 300000) // 5 minutes
     public void cleanupStaleSessions() {
         long now = System.currentTimeMillis();
-        long staleThreshold = now - (2 * 60 * 1000); // 2 minutes without heartbeat
+        long staleThreshold = now - (2 * 60 * 1000); // 2 minutes without activity
 
-        activeSessions.entrySet().removeIf(entry -> {
+        int removed = 0;
+        for (var entry : activeSessions.entrySet()) {
             if (entry.getValue() < staleThreshold) {
-                log.warn("Removing stale session: {}", entry.getKey());
-                return true;
+                log.warn("Found stale session: {}", entry.getKey());
+                removed++;
             }
-            return false;
-        });
+        }
+
+        if (removed > 0) {
+            log.warn("Removed {} stale sessions (Note: sessions will clean up on disconnect)", removed);
+        }
 
         // Log current stats
         log.debug("Session stats - Active: {}, Total connections: {}",
                 currentConnections.get(), totalConnections.get());
-    }
-
-    // Update heartbeat timestamp (call this when receiving messages)
-    public void updateHeartbeat(String sessionId) {
-        if (sessionId != null) {
-            activeSessions.put(sessionId, System.currentTimeMillis());
-        }
     }
 
     public int getCurrentConnections() {

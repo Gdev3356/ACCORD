@@ -1,8 +1,6 @@
 package com.main.accord.config;
 
 import com.main.accord.websocket.WebSocketAuthInterceptor;
-import com.main.accord.websocket.WebSocketHeartbeatInterceptor;
-import com.main.accord.websocket.WebSocketSessionManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +19,7 @@ import org.springframework.web.socket.config.annotation.WebSocketTransportRegist
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final WebSocketAuthInterceptor authInterceptor;
-    private final WebSocketSessionManager sessionManager;
+    // REMOVED: webSocketSessionManager - no longer needed here
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
@@ -52,10 +50,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
+        // Only add the auth interceptor, NOT the heartbeat interceptor
         registration.interceptors(authInterceptor);
-        registration.interceptors(new WebSocketHeartbeatInterceptor(sessionManager)); // Add this
         registration.taskExecutor()
-                .corePoolSize(2)
+                .corePoolSize(2)      // Small pool for free tier
                 .maxPoolSize(4)
                 .keepAliveSeconds(60);
     }
