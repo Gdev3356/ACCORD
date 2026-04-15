@@ -38,7 +38,7 @@ public interface ChReadStateRepository extends JpaRepository<ChReadState, ChRead
     @Query(value = """
     SELECT c.id_server, COUNT(m.id_message)
     FROM ms_message m
-    JOIN ms_channel c ON c.id_channel = m.id_channel
+    JOIN CH_CHANNEL c ON c.id_channel = m.id_channel
     LEFT JOIN ch_read_state r
         ON r.id_channel = m.id_channel
         AND r.id_user = :userId
