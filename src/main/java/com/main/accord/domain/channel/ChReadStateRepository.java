@@ -14,7 +14,7 @@ public interface ChReadStateRepository extends JpaRepository<ChReadState, ChRead
 
     /**
      * Single query: counts unread messages per channel for every channel in a server.
-     * Joins last-read message by PK (fast), groups by channel, skips channels with 0 unread.
+     * Uses the timestamp directly, it's safer than joining the message table.
      * Returns Object[]{ channelId::text, count }.
      */
     @Query(nativeQuery = true, value = """
@@ -25,7 +25,6 @@ public interface ChReadStateRepository extends JpaRepository<ChReadState, ChRead
         LEFT JOIN ch_read_state r ON r.id_channel = m.id_channel
                                  AND r.id_user    = :userId
         WHERE  m.st_deleted = FALSE
-          -- Use the timestamp directly, it's safer than joining the message table
           AND  (r.dt_last_read IS NULL OR m.dt_created > r.dt_last_read)
         GROUP  BY m.id_channel
         HAVING COUNT(*) > 0
