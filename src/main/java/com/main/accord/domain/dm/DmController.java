@@ -17,6 +17,9 @@ import java.util.UUID;
 public class DmController {
 
     private final DmService dmService;
+
+
+    
     private final DmReadStateRepository dmReadStateRepository;
     public record SendMessageRequest(String content, UUID replyToId, UUID forwardAttachmentFrom, String tpMessage, java.util.Map<String, Object> jsActivity) {}
 

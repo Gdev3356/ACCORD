@@ -69,16 +69,11 @@ public interface DmMessageRepository extends JpaRepository<DmMessage, UUID> {
     // Ranked full-text search
     @Query(value = """
     SELECT
-        ID_MESSAGE,
-        ID_CONVERSATION,
-        ID_AUTHOR,
-        ID_REPLY_TO,
-        DS_CONTENT,
-        ST_EDITED,
-        ST_DELETED,
-        DT_CREATED,
-        DT_EDITED,
-        ID_FORWARDED_FROM
+        ID_MESSAGE, ID_CONVERSATION, ID_AUTHOR, ID_REPLY_TO,
+        DS_CONTENT, ST_EDITED, ST_DELETED, DT_CREATED, DT_EDITED,
+        ID_FORWARDED_FROM,
+        TP_MESSAGE,
+        JS_ACTIVITY
     FROM  DM_MESSAGE
     WHERE ID_CONVERSATION = :convId
       AND ST_DELETED      = FALSE

@@ -45,16 +45,10 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 
     @Query(value = """
     SELECT
-        ID_MESSAGE,
-        ID_CHANNEL,
-        ID_AUTHOR,
-        ID_REPLY_TO,
-        DS_CONTENT,
-        ST_EDITED,
-        ST_PINNED,
-        ST_DELETED,
-        DT_CREATED,
-        DT_EDITED
+        ID_MESSAGE, ID_CHANNEL, ID_AUTHOR, ID_REPLY_TO,
+        DS_CONTENT, ST_EDITED, ST_PINNED, ST_DELETED, DT_CREATED, DT_EDITED,
+        TP_MESSAGE,
+        JS_ACTIVITY
     FROM  MS_MESSAGE
     WHERE ID_CHANNEL = :channelId
       AND ST_DELETED  = FALSE
