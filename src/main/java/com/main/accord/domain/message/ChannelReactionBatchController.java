@@ -12,13 +12,13 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/channels/{channelId}/messages/reactions")
+@RequestMapping("/api/v1/channels/{channelId}/messages")
 @RequiredArgsConstructor
 public class ChannelReactionBatchController {
 
     private final ReactionService reactionService;
 
-    @PostMapping("/batch")
+    @PostMapping("/reactions/batch")
     public ResponseEntity<ApiResponse<Map<UUID, List<ReactionService.ReactionSummary>>>> batch(
             @PathVariable UUID channelId,
             @RequestBody BatchRequest request,
