@@ -6,11 +6,13 @@ import com.main.accord.common.NotFoundException;
 import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
+import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -20,6 +22,7 @@ public class ChannelService {
     private final ChannelRepository  channelRepository;
     private final MemberRepository   memberRepository;
     private final PermissionService  permissionService;
+    private final ChatHandler        chatHandler;
 
     public List<Channel> getChannels(UUID serverId, UUID requesterId) {
         if (!memberRepository.existsByIdServerAndIdUser(serverId, requesterId)) {
@@ -36,13 +39,12 @@ public class ChannelService {
             throw new AccordException("A channel with that name already exists.");
         }
 
-        // Position = end of list by default
         List<Channel> existing = channelRepository.findByIdServerOrderByNrPositionAsc(serverId);
         short nextPosition = existing.isEmpty()
                 ? 0
                 : (short) (existing.get(existing.size() - 1).getNrPosition() + 1);
 
-        return channelRepository.save(
+        Channel saved = channelRepository.save(
                 Channel.builder()
                         .idServer(serverId)
                         .idParent(req.parentId())
@@ -53,6 +55,11 @@ public class ChannelService {
                         .stNsfw(req.nsfw() != null && req.nsfw())
                         .build()
         );
+
+        // broadcast to all server members
+
+        chatHandler.broadcastToServer(serverId, new ChatHandler.ChatEvent("CHANNEL_CREATE", saved));
+        return saved;
     }
 
     @Transactional
@@ -68,7 +75,13 @@ public class ChannelService {
         if (req.position() != null) channel.setNrPosition(req.position());
         if (req.parentId() != null) channel.setIdParent(req.parentId());
 
-        return channelRepository.save(channel);
+        Channel saved = channelRepository.save(channel);
+
+        // ← broadcast
+        chatHandler.broadcastToServer(serverId,
+                new ChatHandler.ChatEvent("CHANNEL_UPDATE", saved));
+
+        return saved;
     }
 
     @Transactional
@@ -79,6 +92,11 @@ public class ChannelService {
                 .orElseThrow(() -> new NotFoundException("Channel not found."));
 
         channelRepository.deleteById(channelId);
+
+        // ← broadcast just the id — enough for clients to remove it
+        chatHandler.broadcastToServer(serverId,
+                new ChatHandler.ChatEvent("CHANNEL_DELETE",
+                        Map.of("idChannel", channelId.toString(), "idServer", serverId.toString())));
     }
 
     private void assertPermission(UUID userId, UUID serverId, long permission) {

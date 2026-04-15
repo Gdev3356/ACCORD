@@ -1,10 +1,12 @@
 package com.main.accord.websocket;
 
 import com.main.accord.domain.message.Message;
+import com.main.accord.domain.server.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -13,6 +15,7 @@ import java.util.UUID;
 public class ChatHandler {
 
     private final SimpMessagingTemplate broker;
+    private final MemberRepository memberRepository;
 
     public void broadcastToChannel(UUID channelId, Object payload) {
         broker.convertAndSend(
@@ -47,5 +50,11 @@ public class ChatHandler {
         broker.convertAndSend("/topic/channel." + channelId, event);
     }
 
+    public void broadcastToServer(UUID serverId, ChatEvent event) {
+        List<UUID> memberIds = memberRepository.findUserIdsByServerId(serverId); // add this query
+        for (UUID userId : memberIds) {
+            sendToUser(userId, event); // whatever your existing per-user send method is
+        }
+    }
     public record ChatEvent(String type, Object data) {}
 }

@@ -11,6 +11,7 @@ import com.main.accord.domain.channel.ChannelRepository;
 import com.main.accord.domain.channel.ChannelType;
 import com.main.accord.domain.notification.NotifType;
 import com.main.accord.domain.notification.NotificationService;
+import com.main.accord.domain.webhook.WebhookService;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import com.main.accord.websocket.ChatHandler;
@@ -23,6 +24,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +42,9 @@ public class InviteService {
     private final ChannelRepository channelRepository;
     private final AccountRepository accountRepository;
     private final VisualsRepository visualsRepository;
+    private final MemberRoleRepository memberRoleRepository;
+    private final RoleRepository roleRepository;
+    private final WebhookService webhookService;
 
     // ── List invites for a server ─────────────────────────────────────────────
 
@@ -52,8 +57,6 @@ public class InviteService {
 
     @Transactional
     public Invite createInvite(UUID serverId, UUID requesterId, CreateInviteRequest req) {
-        // Any member can create an invite by default — servers can restrict this
-        // via the MANAGE_SERVER permission if they want; keeping it open for now
         assertMember(serverId, requesterId);
 
         OffsetDateTime expires = null;
@@ -67,8 +70,8 @@ public class InviteService {
                         .idServer(serverId)
                         .idChannel(req.channelId())
                         .idCreator(requesterId)
-                        .nrMaxUses(req.maxUses())   // null = unlimited
-                        .dtExpires(expires)          // null = never
+                        .nrMaxUses(req.maxUses())
+                        .dtExpires(expires)
                         .build()
         );
     }
@@ -92,7 +95,23 @@ public class InviteService {
         inviteRepository.save(invite);
     }
 
-    // ── Join by code (called from ServerService / public endpoint) ─────────────
+    private List<Map<String, Object>> getMemberRoles(UUID serverId, UUID userId) {
+        List<MemberRole> memberRoles = memberRoleRepository.findByIdServerAndIdUser(serverId, userId);
+
+        return memberRoles.stream()
+                .map(mr -> roleRepository.findByIdRoleAndIdServer(mr.getIdRole(), serverId).orElse(null))
+                .filter(role -> role != null)
+                .<Map<String, Object>>map(role -> {
+                    Map<String, Object> roleMap = new java.util.HashMap<>();
+                    roleMap.put("idRole", role.getIdRole().toString());
+                    roleMap.put("dsName", role.getDsName());
+                    roleMap.put("nrColor", role.getNrColor() != null ? role.getNrColor() : 0x818cf8);
+                    return roleMap;
+                })
+                .collect(Collectors.toList());
+    }
+
+    // ── Join by code ─────────────────────────────────────────────────────────
 
     @Transactional
     public Invite joinByCode(UUID userId, String code) {
@@ -121,6 +140,7 @@ public class InviteService {
         serverRepository.findById(serverId)
                 .orElseThrow(() -> new NotFoundException("Server no longer exists."));
 
+        // Save the member
         memberRepository.save(
                 Member.builder()
                         .idServer(serverId)
@@ -134,7 +154,7 @@ public class InviteService {
         }
         inviteRepository.save(invite);
 
-        // Notify the invite creator that someone joined via their link
+        // Notify the invite creator
         if (invite.getIdCreator() != null && !invite.getIdCreator().equals(userId)) {
             notificationService.send(
                     invite.getIdCreator(),
@@ -149,7 +169,7 @@ public class InviteService {
             );
         }
 
-        // Fetch user data to include in broadcast
+        // Fetch user data
         Account account = accountRepository.findById(userId).orElse(null);
         Visuals visuals = visualsRepository.findById(userId).orElse(null);
 
@@ -159,37 +179,60 @@ public class InviteService {
                 ? visuals.getDsPfpUrl()
                 : "https://i.imgur.com/eTh2muI.png";
 
-        // Broadcast member join to the server's first text channel (for existing members)
+        // Get member roles as formatted maps
+        List<Map<String, Object>> memberRoles = getMemberRoles(serverId, userId);
+
+        // Prepare member data
+        Map<String, Object> memberData = Map.of(
+                "userId", userId.toString(),
+                "displayName", displayName,
+                "handle", handle,
+                "pfpUrl", pfpUrl,
+                "nickname", (String) null,
+                "roles", memberRoles
+        );
+
+        // Trigger webhook
+        webhookService.executeMemberJoinWebhooks(serverId, userId, displayName, handle);
+
+        // Broadcast to all server members
+        List<Member> allMembers = memberRepository.findByIdServer(serverId);
+        for (Member member : allMembers) {
+            if (!member.getIdUser().equals(userId)) {
+                chatHandler.sendToUser(member.getIdUser(), Map.of(
+                        "type", "MEMBER_JOIN",
+                        "data", memberData
+                ));
+            }
+        }
+
+        // Broadcast to first text channel
         channelRepository.findByIdServerOrderByNrPositionAsc(serverId).stream()
                 .filter(c -> c.getTpChannel() == ChannelType.text)
                 .findFirst()
                 .ifPresent(firstTextChannel ->
                         chatHandler.broadcastToChannel(firstTextChannel.getIdChannel(), Map.of(
                                 "type", "MEMBER_JOIN",
-                                "data", Map.of(
-                                        "userId", userId.toString(),
-                                        "displayName", displayName,
-                                        "handle", handle,
-                                        "pfpUrl", pfpUrl
-                                )
+                                "data", memberData
                         ))
                 );
 
-        // Also send to the user who just joined (so they see their own data)
+        // Send to joining user
         chatHandler.sendToUser(userId, Map.of(
-                "type", "MEMBER_JOIN",
+                "type", "MEMBER_JOIN_SELF",
                 "data", Map.of(
                         "userId", userId.toString(),
                         "displayName", displayName,
                         "handle", handle,
-                        "pfpUrl", pfpUrl
+                        "pfpUrl", pfpUrl,
+                        "serverId", serverId.toString()
                 )
         ));
 
         return invite;
     }
 
-    // ── Lookup (for preview before joining) ───────────────────────────────────
+    // ── Lookup ───────────────────────────────────────────────────────────────
 
     public Invite previewInvite(String code) {
         OffsetDateTime now = OffsetDateTime.now();
@@ -217,7 +260,6 @@ public class InviteService {
         for (int i = 0; i < CODE_LENGTH; i++) {
             sb.append(CODE_ALPHABET.charAt(rng.nextInt(CODE_ALPHABET.length())));
         }
-        // Collision is astronomically unlikely but guard anyway
         String code = sb.toString();
         return inviteRepository.findByDsCode(code).isPresent() ? generateCode() : code;
     }
@@ -225,8 +267,8 @@ public class InviteService {
     // ── Request records ───────────────────────────────────────────────────────
 
     public record CreateInviteRequest(
-            UUID    channelId,      // optional — which channel the invite links to
-            Integer maxUses,        // null = unlimited
-            Long    expiresInSeconds // null = never; e.g. 86400 = 24 hours
+            UUID    channelId,
+            Integer maxUses,
+            Long    expiresInSeconds
     ) {}
 }

@@ -61,8 +61,37 @@ public class DmService {
                                     .idConversation(convo.getIdConversation())
                                     .idUser(targetId).build()
                     ));
+
+                    // Send a SYSTEM MESSAGE inside the DM
+                    String requesterName = accountRepository.findById(requesterId)
+                            .map(Account::getDsDisplayName).orElse("User");
+                    String targetName = accountRepository.findById(targetId)
+                            .map(Account::getDsDisplayName).orElse("User");
+
+                    String systemMessage = String.format("💬 **%s** started a conversation with **%s**",
+                            requesterName, targetName);
+                    sendSystemMessage(convo.getIdConversation(), systemMessage);
+
                     return convo;
                 });
+    }
+
+    @Transactional
+    public DmMessage sendSystemMessage(UUID conversationId, String content) {
+        DmMessage saved = dmMessageRepository.save(
+                DmMessage.builder()
+                        .idConversation(conversationId)
+                        .idAuthor(null)  // null = system message
+                        .dsContent(content)
+                        .tpMessage("system")
+                        .build()
+        );
+
+        DmMessage broadcast = cloneWithDecryptedContent(saved, content);
+        chatHandler.broadcastToDm(conversationId,
+                Map.of("type", "DM_MESSAGE_CREATE", "data", broadcast));
+
+        return broadcast;
     }
 
     @Transactional

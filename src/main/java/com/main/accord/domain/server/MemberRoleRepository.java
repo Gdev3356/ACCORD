@@ -8,6 +8,13 @@ import java.util.UUID;
 
 public interface MemberRoleRepository extends JpaRepository<MemberRole, MemberRole.MemberRoleId> {
 
+    // Find all member-role associations for a specific user in a server
+    List<MemberRole> findByIdServerAndIdUser(UUID serverId, UUID userId);
+
+    // Optional: Find roles by member
+    @Query("SELECT mr.idRole FROM MemberRole mr WHERE mr.idServer = :serverId AND mr.idUser = :userId")
+    List<UUID> findRoleIdsByMember(UUID serverId, UUID userId);
+
     @Query("""
         SELECT r FROM Role r
         JOIN MemberRole mr ON mr.idRole = r.idRole
