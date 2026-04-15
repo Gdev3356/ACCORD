@@ -13,6 +13,6 @@ public class PlayerSettingsId implements Serializable {
     @Column(name = "ID_USER")
     private UUID idUser;
 
-    @Column(name = "DS_GAME")
-    private String dsGame;
+    @Column(name = "ID_GAME")
+    private UUID idGame;
 }

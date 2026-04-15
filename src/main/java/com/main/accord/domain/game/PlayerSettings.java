@@ -1,6 +1,5 @@
 package com.main.accord.domain.game;
 
-import com.main.accord.domain.account.Account;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -22,8 +21,8 @@ public class PlayerSettings {
     private UUID idUser;
 
     @Id
-    @Column(name = "DS_GAME", nullable = false, length = 50)
-    private String dsGame;
+    @Column(name = "ID_GAME", nullable = false)
+    private UUID idGame;
 
     @Builder.Default
     @JdbcTypeCode(SqlTypes.JSON)

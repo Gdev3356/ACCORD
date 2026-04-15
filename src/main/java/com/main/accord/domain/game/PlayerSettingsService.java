@@ -19,6 +19,7 @@ public class PlayerSettingsService {
 
     private final PlayerSettingsRepository settingsRepository;
     private final AccountRepository accountRepository;
+    private final GmGameRepository gameRepository;  // ← Add this to look up game by slug
 
     // ── Validators registry ───────────────────────────────────────────────────
 
@@ -69,7 +70,11 @@ public class PlayerSettingsService {
     // ── Public API ────────────────────────────────────────────────────────────
 
     public Map<String, Object> getSettings(UUID userId, String gameSlug) {
-        return settingsRepository.findByIdIdUserAndDsGame(userId, gameSlug)
+        // Look up the game to get its UUID
+        GmGame game = gameRepository.findByDsSlug(gameSlug)
+                .orElseThrow(() -> new NotFoundException("Game not found: " + gameSlug));
+
+        return settingsRepository.findByIdIdUserAndIdGame(userId, game.getIdGame())
                 .map(PlayerSettings::getJsSettings)
                 .orElse(Map.of());
     }
@@ -88,12 +93,16 @@ public class PlayerSettingsService {
         accountRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found."));
 
-        // 3. Upsert with merge semantics (using String gameSlug, not UUID)
+        // 3. Look up game to get UUID
+        GmGame game = gameRepository.findByDsSlug(gameSlug)
+                .orElseThrow(() -> new NotFoundException("Game not found: " + gameSlug));
+
+        // 4. Upsert with merge semantics (using UUID)
         PlayerSettings settings = settingsRepository
-                .findByIdIdUserAndDsGame(userId, gameSlug)
+                .findByIdIdUserAndIdGame(userId, game.getIdGame())
                 .orElseGet(() -> PlayerSettings.builder()
                         .idUser(userId)
-                        .dsGame(gameSlug)
+                        .idGame(game.getIdGame())
                         .jsSettings(new HashMap<>())
                         .build());
 
