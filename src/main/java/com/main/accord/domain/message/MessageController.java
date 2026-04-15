@@ -9,6 +9,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -17,6 +18,7 @@ import java.util.UUID;
 public class MessageController {
 
     private final MessageService messageService;
+    private final ReactionService reactionService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<Message>>> getMessages(
@@ -77,6 +79,44 @@ public class MessageController {
         return ResponseEntity.ok(ApiResponse.ok(
                 messageService.searchMessages(channelId, principal.userId(), q, limit)
         ));
+    }
+
+    @PutMapping("/{messageId}/reactions/{emoji}")
+    public ResponseEntity<ApiResponse<Void>> addReaction(
+            @PathVariable UUID channelId,
+            @PathVariable UUID messageId,
+            @PathVariable String emoji,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        reactionService.addServerReaction(messageId, channelId, principal.userId(), emoji);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @DeleteMapping("/{messageId}/reactions/{emoji}")
+    public ResponseEntity<ApiResponse<Void>> removeReaction(
+            @PathVariable UUID channelId,
+            @PathVariable UUID messageId,
+            @PathVariable String emoji,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        reactionService.removeServerReaction(messageId, channelId, principal.userId(), emoji);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @GetMapping("/{messageId}/reactions")
+    public ResponseEntity<ApiResponse<List<ReactionService.ReactionSummary>>> getReactions(
+            @PathVariable UUID channelId,
+            @PathVariable UUID messageId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                reactionService.getServerReactions(messageId, principal.userId())));
+    }
+
+    @PostMapping("/reactions/batch")
+    public ResponseEntity<ApiResponse<Map<UUID, List<ReactionService.ReactionSummary>>>> batchReactions(
+            @PathVariable UUID channelId,
+            @RequestBody ReactionBatchController.BatchReactionsRequest request,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                reactionService.getServerReactionsBatch(request.messageIds(), principal.userId())));
     }
 
     @DeleteMapping("/{messageId}")
