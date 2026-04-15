@@ -2,6 +2,8 @@ package com.main.accord.domain.message;
 
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.account.AccountRepository;
+import com.main.accord.domain.account.VisualsRepository;
 import com.main.accord.domain.channel.ChannelRepository;
 import com.main.accord.domain.dm.DmMessage;
 import com.main.accord.domain.dm.DmMessageRepository;
@@ -9,15 +11,18 @@ import com.main.accord.domain.dm.DmReaction;
 import com.main.accord.domain.dm.DmReactionRepository;
 import com.main.accord.domain.notification.NotifType;
 import com.main.accord.domain.notification.NotificationService;
+import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReactionService {
@@ -30,9 +35,12 @@ public class ReactionService {
     private final DmMessageRepository  dmMessageRepository;
     private final ChatHandler          chatHandler;
     private final NotificationService  notificationService;
+    private final MemberRepository     memberRepository;
+    private final AccountRepository    accountRepository;
+    private final VisualsRepository    visualsRepository;
 
     // ──────────────────────────────────────────────────────────────────────
-    // DM REACTIONS
+    // DM REACTIONS (Updated with identity)
     // ──────────────────────────────────────────────────────────────────────
 
     public List<ReactionSummary> getDmReactions(UUID messageId, UUID callerId) {
@@ -44,7 +52,8 @@ public class ReactionService {
                 .map(row -> new ReactionSummary(
                         (String) row[1],                    // emoji
                         ((Number) row[2]).longValue(),      // count
-                        ((Number) row[3]).longValue() > 0   // reactedByMe
+                        ((Number) row[3]).longValue() > 0,  // reactedByMe
+                        new ArrayList<>()                   // reactors - populated on demand
                 ))
                 .toList();
     }
@@ -63,7 +72,7 @@ public class ReactionService {
             long count = ((Number) row[2]).longValue();
             boolean reactedByMe = ((Number) row[3]).longValue() > 0;
 
-            result.get(msgId).add(new ReactionSummary(emoji, count, reactedByMe));
+            result.get(msgId).add(new ReactionSummary(emoji, count, reactedByMe, new ArrayList<>()));
         }
 
         return result;
@@ -74,6 +83,15 @@ public class ReactionService {
         DmMessage msg = dmMessageRepository.findById(messageId)
                 .orElseThrow(() -> new NotFoundException("Message not found."));
 
+        // Get Account info (for display name)
+        var account = accountRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User account not found"));
+
+        // Get Visuals (for avatar/pfp)
+        var visuals = visualsRepository.findById(userId).orElse(null);
+        String pfpUrl = visuals != null ? visuals.getDsPfpUrl() : "https://i.imgur.com/eTh2muI.png";
+
+        // Save reaction
         if (!dmReactionRepository.existsByIdMessageAndIdUserAndDsEmoji(messageId, userId, emoji)) {
             dmReactionRepository.save(DmReaction.builder()
                     .idMessage(messageId)
@@ -84,19 +102,22 @@ public class ReactionService {
 
         // Send notification if reacting to someone else's message
         if (msg.getIdAuthor() != null && !msg.getIdAuthor().equals(userId)) {
-            notificationService.send(
-                    msg.getIdAuthor(),
-                    NotifType.message,
-                    "New reaction on your message",
-                    emoji,
-                    Map.of(
-                            "conversationId", msg.getIdConversation().toString(),
-                            "messageId", messageId.toString()
-                    )
-            );
+            try {
+                notificationService.send(
+                        msg.getIdAuthor(),
+                        NotifType.message,
+                        "New reaction on your message",
+                        emoji,
+                        Map.of(
+                                "conversationId", msg.getIdConversation().toString(),
+                                "messageId", messageId.toString()
+                        )
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send DM reaction notification: {}", e.getMessage());
+            }
         }
 
-        // Broadcast to DM conversation
         chatHandler.broadcastToDm(
                 msg.getIdConversation(),
                 Map.of(
@@ -104,12 +125,16 @@ public class ReactionService {
                         "data", Map.of(
                                 "messageId", messageId,
                                 "userId", userId,
-                                "emoji", emoji
+                                "emoji", emoji,
+                                "reactor", Map.of(           // ← THIS WAS MISSING!
+                                        "idUser", userId,
+                                        "displayName", account.getDsDisplayName(),
+                                        "pfpUrl", pfpUrl
+                                )
                         )
                 )
         );
     }
-
     @Transactional
     public void removeDmReaction(UUID messageId, UUID userId, String emoji) {
         dmReactionRepository.deleteByIdMessageAndIdUserAndDsEmoji(messageId, userId, emoji);
@@ -130,7 +155,7 @@ public class ReactionService {
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // SERVER CHANNEL REACTIONS
+    // SERVER CHANNEL REACTIONS (Updated with full identity)
     // ──────────────────────────────────────────────────────────────────────
 
     public List<ReactionSummary> getServerReactions(UUID messageId, UUID callerId) {
@@ -138,7 +163,8 @@ public class ReactionService {
                 .map(row -> new ReactionSummary(
                         (String) row[0],
                         (Long) row[1],
-                        (Boolean) row[2]
+                        (Boolean) row[2],
+                        new ArrayList<>()  // reactors - populated on demand
                 ))
                 .toList();
     }
@@ -157,7 +183,7 @@ public class ReactionService {
             long count = ((Number) row[2]).longValue();
             boolean reactedByMe = row[3] != null && ((Number) row[3]).longValue() > 0;
 
-            result.get(msgId).add(new ReactionSummary(emoji, count, reactedByMe));
+            result.get(msgId).add(new ReactionSummary(emoji, count, reactedByMe, new ArrayList<>()));
         }
 
         return result;
@@ -168,15 +194,28 @@ public class ReactionService {
         Message msg = messageRepository.findById(messageId)
                 .orElseThrow(() -> new NotFoundException("Message not found."));
 
-        var channel = channelRepository.findById(channelId)
+        UUID actualChannelId = msg.getIdChannel();
+        var channel = channelRepository.findById(actualChannelId)
                 .orElseThrow(() -> new NotFoundException("Channel not found."));
 
-        // Check permissions
-        if (!permissionService.can(userId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS)) {
+        // Get Member info (for nickname)
+        var member = memberRepository.findByIdServerAndIdUser(channel.getIdServer(), userId)
+                .orElseThrow(() -> new ForbiddenException("User is not a member of this server"));
+
+        // Get Account info (for display name fallback)
+        var account = accountRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User account not found"));
+
+        // Get Visuals (for avatar/pfp)
+        var visuals = visualsRepository.findById(userId).orElse(null);
+        String pfpUrl = visuals != null ? visuals.getDsPfpUrl() : "https://i.imgur.com/eTh2muI.png";
+
+        // Permission check
+        if (!permissionService.can(userId, actualChannelId, channel.getIdServer(), Permissions.VIEW_CHANNELS)) {
             throw new ForbiddenException("You don't have access to this channel.");
         }
 
-        // Add reaction if it doesn't exist
+        // Save reaction
         if (!reactionRepository.existsByIdMessageAndIdUserAndDsEmoji(messageId, userId, emoji)) {
             reactionRepository.save(Reaction.builder()
                     .idMessage(messageId)
@@ -185,29 +224,41 @@ public class ReactionService {
                     .build());
         }
 
-        // Send notification if reacting to someone else's message
+        // Notification (optional)
         if (msg.getIdAuthor() != null && !msg.getIdAuthor().equals(userId)) {
-            notificationService.send(
-                    msg.getIdAuthor(),
-                    NotifType.message,
-                    "New reaction on your message",
-                    emoji,
-                    Map.of(
-                            "channelId", channelId.toString(),
-                            "messageId", messageId.toString()
-                    )
-            );
+            try {
+                notificationService.send(
+                        msg.getIdAuthor(),
+                        NotifType.message,
+                        "New reaction on your message",
+                        emoji,
+                        Map.of(
+                                "channelId", actualChannelId.toString(),
+                                "messageId", messageId.toString()
+                        )
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send server reaction notification: {}", e.getMessage());
+            }
         }
 
-        // Broadcast to channel
+        // Broadcast with full identity
+        String displayNickname = member.getDsNickname() != null ? member.getDsNickname() : account.getDsDisplayName();
+
         chatHandler.broadcastToChannel(
-                channelId,
+                actualChannelId,
                 Map.of(
                         "type", "MESSAGE_REACTION_ADD",
                         "data", Map.of(
                                 "messageId", messageId,
                                 "userId", userId,
-                                "emoji", emoji
+                                "emoji", emoji,
+                                "reactor", Map.of(
+                                        "idUser", userId,
+                                        "displayName", account.getDsDisplayName(),
+                                        "nickname", displayNickname,
+                                        "pfpUrl", pfpUrl
+                                )
                         )
                 )
         );
@@ -269,8 +320,25 @@ public class ReactionService {
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // DTO
+    // DTOs
     // ──────────────────────────────────────────────────────────────────────
 
-    public record ReactionSummary(String emoji, long count, boolean reactedByMe) {}
+    public record ReactionSummary(
+            String emoji,
+            long count,
+            boolean reactedByMe,
+            List<ReactorDto> reactors
+    ) {
+        // Constructor for backward compatibility
+        public ReactionSummary(String emoji, long count, boolean reactedByMe) {
+            this(emoji, count, reactedByMe, new ArrayList<>());
+        }
+    }
+
+    public record ReactorDto(
+            UUID idUser,
+            String displayName,
+            String nickname,
+            String pfpUrl
+    ) {}
 }

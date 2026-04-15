@@ -20,13 +20,13 @@ public interface ChReadStateRepository extends JpaRepository<ChReadState, ChRead
     @Query(nativeQuery = true, value = """
         SELECT m.id_channel::text, COUNT(*) AS cnt
         FROM   ms_message m
-        JOIN   ch_channel c   ON c.id_channel   = m.id_channel
-                             AND c.id_server     = :serverId
+        JOIN   ch_channel c   ON c.id_channel = m.id_channel
+                             AND c.id_server = :serverId
         LEFT JOIN ch_read_state r ON r.id_channel = m.id_channel
                                  AND r.id_user    = :userId
-        LEFT JOIN ms_message last  ON last.id_message = r.id_last_read_msg
         WHERE  m.st_deleted = FALSE
-          AND  (last.dt_created IS NULL OR m.dt_created > last.dt_created)
+          -- Use the timestamp directly, it's safer than joining the message table
+          AND  (r.dt_last_read IS NULL OR m.dt_created > r.dt_last_read)
         GROUP  BY m.id_channel
         HAVING COUNT(*) > 0
     """)
