@@ -12,6 +12,8 @@ import com.main.accord.domain.server.ServerRepository;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import com.main.accord.websocket.ChatHandler;
+import com.main.accord.domain.account.Account;
+import com.main.accord.domain.account.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,7 @@ public class WebhookService {
     private final PermissionService permissionService;
     private final MessageService messageService;
     private final ChatHandler chatHandler;
+    private final AccountRepository accountRepository;
 
     @Transactional
     public Webhook createWebhook(UUID serverId, UUID channelId, UUID creatorId,
@@ -189,5 +192,49 @@ public class WebhookService {
         }
 
         return webhookRepository.save(webhook);
+    }
+
+    public void executeMemberLeaveWebhooks(UUID serverId, UUID userId, String userDisplayName) {
+        List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "MEMBER_JOIN");
+
+        for (Webhook webhook : webhooks) {
+            executeWebhook(webhook, Map.of(
+                    "user", userDisplayName,
+                    "server", getServerName(serverId),
+                    "action", "left"
+            ));
+        }
+    }
+
+    public void executeMemberModerationWebhook(UUID serverId, UUID targetId, UUID moderatorId,
+                                               String targetName, String moderatorName,
+                                               String action, String reason) {
+        List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "MEMBER_MODERATION");
+
+        String reasonText = (reason != null && !reason.isEmpty()) ? " Reason: " + reason : "";
+
+        for (Webhook webhook : webhooks) {
+            executeWebhook(webhook, Map.of(
+                    "user", targetName,
+                    "moderator", moderatorName,
+                    "server", getServerName(serverId),
+                    "action", action,
+                    "reason", reasonText
+            ));
+        }
+    }
+
+    public void executeMemberRoleWebhook(UUID serverId, UUID userId, String userDisplayName,
+                                         String roleName, String action) {
+        List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "MEMBER_ROLE");
+
+        for (Webhook webhook : webhooks) {
+            executeWebhook(webhook, Map.of(
+                    "user", userDisplayName,
+                    "role", roleName,
+                    "server", getServerName(serverId),
+                    "action", action
+            ));
+        }
     }
 }

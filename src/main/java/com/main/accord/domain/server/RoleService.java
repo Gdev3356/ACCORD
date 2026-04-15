@@ -3,6 +3,9 @@ package com.main.accord.domain.server;
 import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.account.Account;
+import com.main.accord.domain.account.AccountRepository;
+import com.main.accord.domain.webhook.WebhookService;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +24,8 @@ public class RoleService {
     private final MemberRoleRepository memberRoleRepository;
     private final ServerRepository     serverRepository;
     private final PermissionService    permissionService;
+    private final AccountRepository    accountRepository;
+    private final WebhookService       webhookService;
 
     // ── List ─────────────────────────────────────────────────────────────────
 
@@ -107,6 +112,12 @@ public class RoleService {
                             .idRole(roleId)
                             .build()
             );
+            Account targetAccount = accountRepository.findById(targetUserId).orElse(null);
+            Role role = roleRepository.findById(roleId).orElse(null);
+            String targetName = targetAccount != null ? targetAccount.getDsDisplayName() : "User";
+            String roleName = role != null ? role.getDsName() : "Unknown Role";
+
+            webhookService.executeMemberRoleWebhook(serverId, targetUserId, targetName, roleName, "added");
         }
     }
 
@@ -115,6 +126,14 @@ public class RoleService {
         assertPermission(requesterId, serverId, Permissions.MANAGE_SERVER);
 
         MemberRole.MemberRoleId pk = new MemberRole.MemberRoleId(serverId, targetUserId, roleId);
+
+        Account targetAccount = accountRepository.findById(targetUserId).orElse(null);
+        Role role = roleRepository.findById(roleId).orElse(null);
+        String targetName = targetAccount != null ? targetAccount.getDsDisplayName() : "User";
+        String roleName = role != null ? role.getDsName() : "Unknown Role";
+
+        webhookService.executeMemberRoleWebhook(serverId, targetUserId, targetName, roleName, "removed");
+
         memberRoleRepository.deleteById(pk);
     }
 

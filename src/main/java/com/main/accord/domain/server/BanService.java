@@ -2,10 +2,13 @@ package com.main.accord.domain.server;
 
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.account.Account;
+import com.main.accord.domain.account.AccountRepository;
 import com.main.accord.domain.account.BanLog;
 import com.main.accord.domain.account.BanLogRepository;
 import com.main.accord.domain.notification.NotifType;
 import com.main.accord.domain.notification.NotificationService;
+import com.main.accord.domain.webhook.WebhookService;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import com.main.accord.websocket.ChatHandler;
@@ -30,6 +33,8 @@ public class BanService {
     private final PermissionService   permissionService;
     private final ChatHandler         chatHandler;
     private final NotificationService notificationService;
+    private final AccountRepository   accountRepository;
+    private final WebhookService      webhookService;
 
     // ── Server ban ────────────────────────────────────────────────────────────
 
@@ -57,9 +62,17 @@ public class BanService {
                         .build()
         );
 
+        Account targetAccount = accountRepository.findById(targetId).orElse(null);
+        Account moderatorAccount = accountRepository.findById(requesterId).orElse(null);
+        String targetName = targetAccount != null ? targetAccount.getDsDisplayName() : "User";
+        String moderatorName = moderatorAccount != null ? moderatorAccount.getDsDisplayName() : "Moderator";
+
         if (memberRepository.existsByIdServerAndIdUser(serverId, targetId)) {
             memberRepository.deleteByIdServerAndIdUser(serverId, targetId);
         }
+
+        webhookService.executeMemberModerationWebhook(serverId, targetId, requesterId,
+                targetName, moderatorName, "banned", reason);
 
         // Persist a notification record AND push it over WebSocket before their session drops
         notificationService.send(

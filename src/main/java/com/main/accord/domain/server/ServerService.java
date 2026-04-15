@@ -3,9 +3,12 @@ package com.main.accord.domain.server;
 import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.account.Account;
+import com.main.accord.domain.account.AccountRepository;
 import com.main.accord.domain.channel.ChReadStateRepository;
 import com.main.accord.domain.notification.NotifType;
 import com.main.accord.domain.notification.NotificationService;
+import com.main.accord.domain.webhook.WebhookService;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import com.main.accord.websocket.ChatHandler;
@@ -33,6 +36,8 @@ public class ServerService {
     private final ChatHandler       chatHandler;
     private final NotificationService notificationService;
     private final ChReadStateRepository chReadStateRepository;
+    private final AccountRepository  accountRepository;
+    private final WebhookService     webhookService;
 
     // ── List ──────────────────────────────────────────────────────────────────
 
@@ -139,7 +144,15 @@ public class ServerService {
         }
         assertRoleHierarchy(requesterId, targetId, serverId);
 
+        Account targetAccount = accountRepository.findById(targetId).orElse(null);
+        Account moderatorAccount = accountRepository.findById(requesterId).orElse(null);
+        String targetName = targetAccount != null ? targetAccount.getDsDisplayName() : "User";
+        String moderatorName = moderatorAccount != null ? moderatorAccount.getDsDisplayName() : "Moderator";
+
         memberRepository.deleteByIdServerAndIdUser(serverId, targetId);
+
+        webhookService.executeMemberModerationWebhook(serverId, targetId, requesterId,
+                targetName, moderatorName, "kicked", reason);
 
         chatHandler.sendToUser(targetId, Map.of(
                 "type", "SERVER_KICK",
@@ -175,7 +188,13 @@ public class ServerService {
         if (!memberRepository.existsByIdServerAndIdUser(serverId, userId)) {
             throw new NotFoundException("You are not a member of this server.");
         }
+
+        Account account = accountRepository.findById(userId).orElse(null);
+        String userDisplayName = account != null ? account.getDsDisplayName() : "User";
+
         memberRepository.deleteByIdServerAndIdUser(serverId, userId);
+
+        webhookService.executeMemberLeaveWebhooks(serverId, userId, userDisplayName);
     }
 
     // ── Timeout Member ────────────────────────────────────────────────────────
@@ -203,6 +222,14 @@ public class ServerService {
         member.setDtTimeoutExpires(expiresAt);
 
         Member saved = memberRepository.save(member);
+
+        Account targetAccount = accountRepository.findById(targetId).orElse(null);
+        Account moderatorAccount = accountRepository.findById(requesterId).orElse(null);
+        String targetName = targetAccount != null ? targetAccount.getDsDisplayName() : "User";
+        String moderatorName = moderatorAccount != null ? moderatorAccount.getDsDisplayName() : "Moderator";
+
+        webhookService.executeMemberModerationWebhook(serverId, targetId, requesterId,
+                targetName, moderatorName, "timed out", reason + " (" + durationMinutes + " minutes)");
 
         // WebSocket notification
         chatHandler.sendToUser(targetId, Map.of(
@@ -329,7 +356,7 @@ public class ServerService {
         Member member = memberRepository.findByIdServerAndIdUser(serverId, targetUserId)
                 .orElseThrow(() -> new NotFoundException("Member not found."));
 
-        if (nickname != null && (nickname.length() < 1 || nickname.length() > 50)) {
+        if (nickname != null && (nickname.isEmpty()|| nickname.length() > 50)) {
             throw new AccordException("Nickname must be between 1 and 50 characters.");
         }
 
