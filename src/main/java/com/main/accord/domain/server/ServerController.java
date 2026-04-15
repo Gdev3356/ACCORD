@@ -174,8 +174,8 @@ public class ServerController {
 
     @GetMapping("/summaries")
     public ResponseEntity<ApiResponse<List<ServerSummaryDto>>> getSummaries(
-            @RequestAttribute UUID userId) {
-        return ResponseEntity.ok(ApiResponse.ok(serverService.getServerSummaries(userId)));
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(serverService.getServerSummaries(principal.userId())));
     }
 
     @PatchMapping("/{serverId}/members/{userId}/nickname")
