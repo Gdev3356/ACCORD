@@ -74,7 +74,7 @@ public class PlayerSettingsService {
         GmGame game = gameRepository.findByDsSlug(gameSlug)
                 .orElseThrow(() -> new NotFoundException("Game not found: " + gameSlug));
 
-        return settingsRepository.findByIdIdUserAndIdGame(userId, game.getIdGame())
+        return settingsRepository.findByIdUserAndIdGame(userId, game.getIdGame())
                 .map(PlayerSettings::getJsSettings)
                 .orElse(Map.of());
     }
@@ -99,7 +99,7 @@ public class PlayerSettingsService {
 
         // 4. Upsert with merge semantics (using UUID)
         PlayerSettings settings = settingsRepository
-                .findByIdIdUserAndIdGame(userId, game.getIdGame())
+                .findByIdUserAndIdGame(userId, game.getIdGame())
                 .orElseGet(() -> PlayerSettings.builder()
                         .idUser(userId)
                         .idGame(game.getIdGame())

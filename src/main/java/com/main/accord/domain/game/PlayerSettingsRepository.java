@@ -8,5 +8,5 @@ import java.util.UUID;
 public interface PlayerSettingsRepository
         extends JpaRepository<PlayerSettings, PlayerSettingsId> {
 
-    Optional<PlayerSettings> findByIdIdUserAndIdGame(UUID idUser, UUID idGame);
+    Optional<PlayerSettings> findByIdUserAndIdGame(UUID idUser, UUID idGame);
 }
