@@ -3,6 +3,10 @@ package com.main.accord.domain.server;
 import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.account.Account;
+import com.main.accord.domain.account.AccountRepository;
+import com.main.accord.domain.account.Visuals;
+import com.main.accord.domain.account.VisualsRepository;
 import com.main.accord.domain.channel.ChannelRepository;
 import com.main.accord.domain.channel.ChannelType;
 import com.main.accord.domain.notification.NotifType;
@@ -34,6 +38,8 @@ public class InviteService {
     private final NotificationService notificationService;
     private final ChatHandler chatHandler;
     private final ChannelRepository channelRepository;
+    private final AccountRepository accountRepository;
+    private final VisualsRepository visualsRepository;
 
     // ── List invites for a server ─────────────────────────────────────────────
 
@@ -143,7 +149,17 @@ public class InviteService {
             );
         }
 
-        // Broadcast member join to the server's first text channel
+        // Fetch user data to include in broadcast
+        Account account = accountRepository.findById(userId).orElse(null);
+        Visuals visuals = visualsRepository.findById(userId).orElse(null);
+
+        String displayName = account != null ? account.getDsDisplayName() : "User";
+        String handle = account != null ? account.getDsHandle() : "";
+        String pfpUrl = (visuals != null && visuals.getDsPfpUrl() != null)
+                ? visuals.getDsPfpUrl()
+                : "https://i.imgur.com/eTh2muI.png";
+
+        // Broadcast member join to the server's first text channel (for existing members)
         channelRepository.findByIdServerOrderByNrPositionAsc(serverId).stream()
                 .filter(c -> c.getTpChannel() == ChannelType.text)
                 .findFirst()
@@ -151,16 +167,25 @@ public class InviteService {
                         chatHandler.broadcastToChannel(firstTextChannel.getIdChannel(), Map.of(
                                 "type", "MEMBER_JOIN",
                                 "data", Map.of(
-                                        "userId", userId.toString()
+                                        "userId", userId.toString(),
+                                        "displayName", displayName,
+                                        "handle", handle,
+                                        "pfpUrl", pfpUrl
                                 )
                         ))
                 );
+
+        // Also send to the user who just joined (so they see their own data)
         chatHandler.sendToUser(userId, Map.of(
                 "type", "MEMBER_JOIN",
                 "data", Map.of(
-                        "userId", userId.toString()
+                        "userId", userId.toString(),
+                        "displayName", displayName,
+                        "handle", handle,
+                        "pfpUrl", pfpUrl
                 )
         ));
+
         return invite;
     }
 
