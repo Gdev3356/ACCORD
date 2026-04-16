@@ -5,14 +5,13 @@ import com.main.accord.common.NotFoundException;
 import com.main.accord.domain.channel.Channel;
 import com.main.accord.domain.channel.ChannelRepository;
 import com.main.accord.domain.message.Message;
-import com.main.accord.domain.message.MessageService;
+import com.main.accord.domain.message.MessageRepository;
 import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.domain.server.Server;
 import com.main.accord.domain.server.ServerRepository;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import com.main.accord.websocket.ChatHandler;
-import com.main.accord.domain.account.Account;
 import com.main.accord.domain.account.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +32,7 @@ public class WebhookService {
     private final ServerRepository serverRepository;
     private final MemberRepository memberRepository;
     private final PermissionService permissionService;
-    private final MessageService messageService;
+    private final MessageRepository messageRepository;
     private final ChatHandler chatHandler;
     private final AccountRepository accountRepository;
 
@@ -117,20 +116,19 @@ public class WebhookService {
 
     private void executeWebhook(Webhook webhook, Map<String, String> variables) {
         try {
-            String messageContent = interpolateMessage(webhook.getDsMessageTemplate(), variables);
+            String content = interpolateMessage(webhook.getDsMessageTemplate(), variables);
 
-            // Send as webhook message (system user)
-            Message message = messageService.sendMessage(
-                    webhook.getIdChannel(),
-                    null, // null author = system/webhook message
-                    messageContent,
-                    null, // no reply
-                    "webhook", // special type for webhook messages
-                    null
+            Message saved = messageRepository.save(
+                    Message.builder()
+                            .idChannel(webhook.getIdChannel())
+                            .idAuthor(null)          // system/webhook
+                            .dsContent(content)      // no encryption needed for system msgs, or encrypt here
+                            .tpMessage("webhook")
+                            .build()
             );
 
-            // Optionally mark it as a webhook message
-            log.debug("Webhook executed in channel {}: {}", webhook.getIdChannel(), messageContent);
+            chatHandler.broadcastToChannel(webhook.getIdChannel(), saved);
+            log.debug("Webhook executed in channel {}: {}", webhook.getIdChannel(), content);
 
         } catch (Exception e) {
             log.error("Failed to execute webhook {}: {}", webhook.getIdWebhook(), e.getMessage());

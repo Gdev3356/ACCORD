@@ -13,7 +13,6 @@ import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +34,7 @@ public class BanService {
     private final ChatHandler         chatHandler;
     private final NotificationService notificationService;
     private final AccountRepository   accountRepository;
-    private final @Lazy WebhookService      webhookService;
+    private final WebhookService      webhookService;
 
     // ── Server ban ────────────────────────────────────────────────────────────
 

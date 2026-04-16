@@ -15,7 +15,6 @@ import com.main.accord.domain.notification.NotificationService;
 import com.main.accord.security.EncryptionService;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +37,7 @@ public class MessageService {
     private final EncryptionService encryptionService;
     private final MentionParser         mentionParser;
     private final NotificationService   notificationService;
-    private final @Lazy BanService            banService;
+    private final BanService            banService;
     private final MsAttachmentRepository msAttachmentRepository;
     private final ChReadStateRepository chReadStateRepository;
     private final MemberRepository memberRepository;
