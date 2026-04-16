@@ -140,12 +140,29 @@ public class WebSocketSessionManager {
 
     private UUID extractUserId(StompHeaderAccessor accessor) {
         Principal user = accessor.getUser();
+        if (user == null) return null;
+
+        // Your interceptor wraps it in StompUser
+        if (user instanceof StompUser stompUser) {
+            Principal inner = stompUser.principal();
+            if (inner instanceof AccordPrincipal accordPrincipal) {
+                return accordPrincipal.userId();
+            }
+        }
+
+        // Fallback: Authentication wrapper (SessionConnectedEvent path)
         if (user instanceof Authentication auth) {
             Object principal = auth.getPrincipal();
             if (principal instanceof AccordPrincipal accordPrincipal) {
                 return accordPrincipal.userId();
             }
         }
+
+        // Direct AccordPrincipal
+        if (user instanceof AccordPrincipal accordPrincipal) {
+            return accordPrincipal.userId();
+        }
+
         return null;
     }
 }
