@@ -1,5 +1,8 @@
 package com.main.accord.websocket;
 
+import com.main.accord.domain.account.Account;
+import com.main.accord.domain.account.AccountRepository;
+import com.main.accord.domain.account.PresenceStatus;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,8 +14,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionConnectEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
-import org.springframework.web.socket.messaging.SessionSubscribeEvent;
-import org.springframework.web.socket.messaging.SessionUnsubscribeEvent;
 
 import java.security.Principal;
 import java.util.UUID;
@@ -28,6 +29,7 @@ public class WebSocketSessionManager {
     private final ConcurrentHashMap<String, SessionInfo> activeSessions = new ConcurrentHashMap<>();
     private final AtomicInteger totalConnections = new AtomicInteger(0);
     private final ChatHandler chatHandler;
+    private final AccountRepository accountRepository;
     private final ConcurrentHashMap<String, UUID> sessionToUser = new ConcurrentHashMap<>();
 
     record SessionInfo(String sessionId, UUID userId, long connectedAt, long lastHeartbeat) {}
@@ -35,8 +37,6 @@ public class WebSocketSessionManager {
     @EventListener
     public void handleSessionConnected(SessionConnectEvent event) {
         String sessionId = event.getMessage().getHeaders().get("simpSessionId", String.class);
-
-        // Extract user ID from the CONNECT frame
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
         UUID userId = extractUserId(accessor);
 
@@ -52,24 +52,25 @@ public class WebSocketSessionManager {
     @EventListener
     public void handleSessionDisconnect(SessionDisconnectEvent event) {
         String sessionId = event.getSessionId();
-        if (sessionId != null) {
-            SessionInfo removed = activeSessions.remove(sessionId);
-            UUID userId = sessionToUser.remove(sessionId);
+        SessionInfo removed = activeSessions.remove(sessionId);
+        UUID userId = sessionToUser.remove(sessionId);
 
-            if (removed != null) {
-                log.info("WebSocket DISCONNECTED - Session: {}, User: {}, Active: {}, Duration: {}ms",
-                        sessionId, userId, activeSessions.size(), System.currentTimeMillis() - removed.connectedAt());
-
-                // Notify ChatHandler that this user might be offline
-                if (userId != null && !hasOtherSessionsForUser(userId, sessionId)) {
-                    // Let ChatHandler handle the actual presence update
-                    // ChatHandler will check its own session count
-                }
-            }
+        if (removed != null) {
+            log.info("WebSocket DISCONNECTED - Session: {}, User: {}, Active: {}, Duration: {}ms",
+                    sessionId, userId, activeSessions.size(), System.currentTimeMillis() - removed.connectedAt());
         }
     }
 
-    @Scheduled(fixedDelay = 60000)
+    // Public method called by the interceptor
+    public void updateHeartbeat(String sessionId) {
+        if (sessionId != null) {
+            activeSessions.computeIfPresent(sessionId, (id, old) ->
+                    new SessionInfo(id, old.userId(), old.connectedAt(), System.currentTimeMillis())
+            );
+        }
+    }
+
+    @Scheduled(fixedDelay = 60000) // Every minute
     public void cleanupStaleSessions() {
         long now = System.currentTimeMillis();
         long staleThreshold = now - (3 * 60 * 1000); // 3 minutes
@@ -82,11 +83,10 @@ public class WebSocketSessionManager {
                 String sessionId = entry.getKey();
                 UUID userId = sessionToUser.get(sessionId);
 
-                log.warn("Removing stale session: {} for user: {}", sessionId, userId);
+                log.warn("Removing stale session: {} for user: {} (last heartbeat: {}ms ago)",
+                        sessionId, userId, now - entry.getValue().lastHeartbeat());
 
-                // Force disconnect handling for this user
                 if (userId != null && !hasOtherSessionsForUser(userId, sessionId)) {
-                    // This was the last session - mark user offline
                     chatHandler.forceOffline(userId);
                 }
 
@@ -96,9 +96,34 @@ public class WebSocketSessionManager {
             }
         }
 
+        checkIdleUsers(now);
+
         if (removed > 0) {
-            log.warn("Cleaned up {} stale sessions, Active now: {}", removed, activeSessions.size());
+            log.info("Cleaned up {} stale sessions, {} active sessions remaining",
+                    removed, activeSessions.size());
         }
+    }
+
+    private void checkIdleUsers(long now) {
+        long idleThreshold = now - (5 * 60 * 1000); // 5 minutes
+
+        activeSessions.values().stream()
+                .map(SessionInfo::userId)
+                .distinct()
+                .forEach(userId -> {
+                    boolean hasRecentActivity = activeSessions.values().stream()
+                            .anyMatch(s -> s.userId().equals(userId) && s.lastHeartbeat() > idleThreshold);
+
+                    if (!hasRecentActivity) {
+                        Account account = accountRepository.findById(userId).orElse(null);
+                        if (account != null && account.getStPresence() == PresenceStatus.online) {
+                            account.setStPresence(PresenceStatus.idle);
+                            accountRepository.save(account);
+                            chatHandler.broadcastPresenceUpdate(userId, PresenceStatus.idle);
+                            log.info("User {} marked as idle due to inactivity", userId);
+                        }
+                    }
+                });
     }
 
     private boolean hasOtherSessionsForUser(UUID userId, String excludeSessionId) {

@@ -20,13 +20,23 @@ import java.util.UUID;
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
     private final JwtService jwtService;
+    private final WebSocketSessionManager sessionManager;  // Add this
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         if (accessor == null) return message;
 
-        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+        StompCommand command = accessor.getCommand();
+
+        // Track session ID for heartbeat updates
+        String sessionId = accessor.getSessionId();
+        if (sessionId != null) {
+            // Update heartbeat on ANY STOMP message (including heartbeats)
+            sessionManager.updateHeartbeat(sessionId);
+        }
+
+        if (StompCommand.CONNECT.equals(command)) {
             String token = accessor.getFirstNativeHeader("Authorization");
             if (token != null && token.startsWith("Bearer ")) {
                 try {
@@ -42,6 +52,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 }
             }
         }
+
         return message;
     }
 }
