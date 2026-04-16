@@ -145,20 +145,13 @@ public class ChatHandler {
     }
 
     private void broadcastOfflineStatus(UUID userId) {
-        // Send offline status to all friends
-        List<UUID> friendIds = memberRepository.findFriendIds(userId);
-        for (UUID friendId : friendIds) {
-            sendToUser(friendId, Map.of(
-                    "type", "PRESENCE_UPDATE",
-                    "data", Map.of("userId", userId, "presence", "offline")
-            ));
-        }
         Account account = accountRepository.findById(userId).orElse(null);
         if (account != null) {
             account.setStPresence(PresenceStatus.offline);
-            log.info("BROADCASTING OFFLINE for userId: {}", userId);
             accountRepository.save(account);
         }
+        // reuse broadcastPresenceUpdate — covers friends + DM participants + self
+        broadcastPresenceUpdate(userId, PresenceStatus.offline);
     }
 
     public void broadcastToChannel(UUID channelId, Object payload) {
