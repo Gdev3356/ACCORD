@@ -6,6 +6,7 @@ import com.main.accord.domain.account.PresenceStatus;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -28,7 +29,7 @@ public class WebSocketSessionManager {
 
     private final ConcurrentHashMap<String, SessionInfo> activeSessions = new ConcurrentHashMap<>();
     private final AtomicInteger totalConnections = new AtomicInteger(0);
-    private final ChatHandler chatHandler;
+    private final ApplicationEventPublisher eventPublisher;
     private final AccountRepository accountRepository;
     private final ConcurrentHashMap<String, UUID> sessionToUser = new ConcurrentHashMap<>();
 
@@ -87,7 +88,7 @@ public class WebSocketSessionManager {
                         sessionId, userId, now - entry.getValue().lastHeartbeat());
 
                 if (userId != null && !hasOtherSessionsForUser(userId, sessionId)) {
-                    chatHandler.forceOffline(userId);
+                    eventPublisher.publishEvent(new UserForcedOfflineEvent(userId));
                 }
 
                 iterator.remove();
@@ -104,6 +105,8 @@ public class WebSocketSessionManager {
         }
     }
 
+    public record UserMarkedIdleEvent(UUID userId) {}
+
     private void checkIdleUsers(long now) {
         long idleThreshold = now - (5 * 60 * 1000); // 5 minutes
 
@@ -119,7 +122,7 @@ public class WebSocketSessionManager {
                         if (account != null && account.getStPresence() == PresenceStatus.online) {
                             account.setStPresence(PresenceStatus.idle);
                             accountRepository.save(account);
-                            chatHandler.broadcastPresenceUpdate(userId, PresenceStatus.idle);
+                            eventPublisher.publishEvent(new UserMarkedIdleEvent(userId));
                             log.info("User {} marked as idle due to inactivity", userId);
                         }
                     }

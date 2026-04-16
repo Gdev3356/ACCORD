@@ -34,6 +34,16 @@ public class ChatHandler {
     private final Map<UUID, Integer> userSessionCount = new ConcurrentHashMap<>();
 
     @EventListener
+    public void handleUserForcedOffline(UserForcedOfflineEvent event) {
+        forceOffline(event.userId());
+    }
+
+    @EventListener
+    public void handleUserMarkedIdle(UserMarkedIdleEvent event) {
+        broadcastPresenceUpdate(event.userId(), PresenceStatus.idle);
+    }
+
+    @EventListener
     public void handleSessionConnected(SessionConnectedEvent event) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
         UUID userId = getUserIdFromSession(accessor);
