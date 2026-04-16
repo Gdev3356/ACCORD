@@ -46,16 +46,16 @@ public interface ParticipantRepository extends JpaRepository<Participant, Partic
             @Param("userId") UUID userId
     );
 
-    @Query("SELECT DISTINCT p.idUser FROM Participant p " +
+    @Query("SELECT DISTINCT p.idUser FROM DmParticipant p " +
             "WHERE p.idConversation IN (" +
-            "   SELECT p2.idConversation FROM Participant p2 " +
+            "   SELECT p2.idConversation FROM DmParticipant p2 " +
             "   WHERE p2.idUser = :userId AND p2.dtLeft IS NULL" +
             ") " +
             "AND p.idUser != :userId AND p.dtLeft IS NULL " +
             "AND p.idConversation IN (" +
             "   SELECT DISTINCT dm.idConversation FROM DmMessage dm " +
             "   WHERE dm.dtCreated > :recent OR dm.idConversation IN (" +
-            "       SELECT DISTINCT p3.idConversation FROM Participant p3 " +
+            "       SELECT DISTINCT p3.idConversation FROM DmParticipant p3 " +
             "       WHERE p3.idUser = :userId AND p3.dtJoined > :recent" +
             "   )" +
             ")")
