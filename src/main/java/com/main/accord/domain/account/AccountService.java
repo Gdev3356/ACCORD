@@ -101,13 +101,18 @@ public class AccountService {
     }
 
     public List<PresenceDto> getRelevantPresences(UUID userId) {
-        Set<UUID> ids = new HashSet<>();
-        ids.addAll(memberRepository.findFriendIds(userId));
-        ids.addAll(participantRepository.findOtherParticipantsInAllDMs(userId, OffsetDateTime.now().minusDays(30)));
+        try {
+            Set<UUID> ids = new HashSet<>();
+            ids.addAll(memberRepository.findFriendIds(userId));
+            ids.addAll(participantRepository.findOtherParticipantsInAllDMs(userId, OffsetDateTime.now().minusDays(30)));
 
-        return accountRepository.findAllById(ids).stream()
-                .map(a -> new PresenceDto(a.getIdUser(), a.getStPresence()))
-                .toList();
+            return accountRepository.findAllById(ids).stream()
+                    .map(a -> new PresenceDto(a.getIdUser(), a.getStPresence()))
+                    .toList();
+        } catch (Exception e) {
+            e.printStackTrace(); // force it to Render logs
+            throw e;
+        }
     }
 
     public record PresenceDto(UUID userId, PresenceStatus presence) {}
