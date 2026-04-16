@@ -86,6 +86,9 @@ public class AccountService {
 
     @Transactional
     public Account updatePresence(UUID userId, PresenceStatus presence) {
+        if (presence == PresenceStatus.offline) {
+            throw new AccordException("Cannot manually set presence to offline.");
+        }
         Account account = accountRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found."));
         account.setStPresence(presence);
