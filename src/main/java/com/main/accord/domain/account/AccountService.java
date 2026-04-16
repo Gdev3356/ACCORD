@@ -1,28 +1,43 @@
 package com.main.accord.domain.account;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.main.accord.common.AccordException;
 import com.main.accord.common.NotFoundException;
 import com.main.accord.domain.dm.ParticipantRepository;
 import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.websocket.ChatHandler;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AccountService {
 
     private final AccountRepository accountRepository;
     private final ChatHandler chatHandler;
     private final MemberRepository memberRepository;
     private final ParticipantRepository participantRepository;
+
+    // Cache for DM participants - expires after 30 seconds
+    private Cache<UUID, Set<UUID>> dmParticipantCache;
+
+    @PostConstruct
+    public void init() {
+        this.dmParticipantCache = Caffeine.newBuilder()
+                .expireAfterWrite(30, TimeUnit.SECONDS)
+                .maximumSize(1000)
+                .build();
+        log.info("Initialized DM participant cache");
+    }
 
     public Account getByHandle(String handle) {
         return accountRepository.findByDsHandleIgnoreCase(handle)
@@ -72,7 +87,6 @@ public class AccountService {
         accountRepository.save(account);
     }
 
-
     @Transactional
     public Account updatePresence(UUID userId, PresenceStatus presence) {
         Account account = accountRepository.findById(userId)
@@ -95,7 +109,6 @@ public class AccountService {
     public void resetToLastPresence(UUID userId) {
         Account account = accountRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found."));
-        // Reset to last manually set presence (not "invisible" if that's what they had)
         account.setStPresence(account.getStLastSetPresence());
         accountRepository.save(account);
     }
@@ -103,15 +116,59 @@ public class AccountService {
     public List<PresenceDto> getRelevantPresences(UUID userId) {
         try {
             Set<UUID> ids = new HashSet<>();
-            ids.addAll(memberRepository.findFriendIds(userId));
-            ids.addAll(participantRepository.findOtherParticipantsInAllDMs(userId, OffsetDateTime.now().minusDays(30)));
 
+            // Always get friends (this is fast)
+            List<UUID> friendIds = memberRepository.findFriendIds(userId);
+            ids.addAll(friendIds);
+
+            // Try to get DM participants with caching
+            try {
+                // Get from cache or compute if absent
+                Set<UUID> dmParticipants = dmParticipantCache.get(userId, id -> {
+                    log.debug("Cache miss for user {}, fetching DM participants", userId);
+                    try {
+                        // Use the simple version for reliability
+                        return participantRepository.findRecentDMParticipants(userId);
+                    } catch (Exception e) {
+                        log.error("Failed to fetch DM participants for user {}", userId, e);
+                        return new HashSet<>(); // Return empty set on error
+                    }
+                });
+
+                if (dmParticipants != null) {
+                    ids.addAll(dmParticipants);
+                }
+
+            } catch (Exception e) {
+                log.warn("Could not fetch DM participants for user {}: {}",
+                        userId, e.getMessage());
+                // Continue with just friends - better than failing completely
+            }
+
+            // Limit total results to prevent memory issues
+            if (ids.size() > 1000) {
+                log.warn("User {} has {} relevant users, limiting to 1000",
+                        userId, ids.size());
+                List<UUID> limitedIds = new ArrayList<>(ids);
+                if (limitedIds.size() > 1000) {
+                    limitedIds = limitedIds.subList(0, 1000);
+                }
+                ids = new HashSet<>(limitedIds);
+            }
+
+            // Fetch and return presence data
             return accountRepository.findAllById(ids).stream()
                     .map(a -> new PresenceDto(a.getIdUser(), a.getStPresence()))
                     .toList();
+
         } catch (Exception e) {
-            e.printStackTrace(); // force it to Render logs
-            throw e;
+            log.error("Failed to fetch presences for user {}", userId, e);
+            // Fallback: return at least the user's own presence
+            Account self = accountRepository.findById(userId).orElse(null);
+            if (self != null) {
+                return List.of(new PresenceDto(self.getIdUser(), self.getStPresence()));
+            }
+            throw new AccordException("Failed to fetch presence data");
         }
     }
 

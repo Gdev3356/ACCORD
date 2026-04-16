@@ -19,7 +19,6 @@ import org.springframework.web.socket.config.annotation.WebSocketTransportRegist
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final WebSocketAuthInterceptor authInterceptor;
-    // REMOVED: webSocketSessionManager - no longer needed here
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {

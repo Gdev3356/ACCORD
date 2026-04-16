@@ -95,9 +95,8 @@ public class ChatHandler {
         // 1. Send to all friends
         List<UUID> friendIds = memberRepository.findFriendIds(userId);
 
-        OffsetDateTime recent = OffsetDateTime.now().minusDays(30);
         // 2. Send to all DM conversation participants
-        List<UUID> dmParticipantIds = participantRepository.findOtherParticipantsInAllDMs(userId, recent);
+        List<UUID> dmParticipantIds = participantRepository.findOtherParticipantsInAllDMs(userId);
 
         // Combine unique user IDs
         Set<UUID> allRecipients = new HashSet<>();

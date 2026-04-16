@@ -4,8 +4,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public interface ParticipantRepository extends JpaRepository<Participant, Participant.ParticipantId> {
@@ -46,18 +46,26 @@ public interface ParticipantRepository extends JpaRepository<Participant, Partic
             @Param("userId") UUID userId
     );
 
-    @Query("SELECT DISTINCT p.idUser FROM DmParticipant p " +
-            "WHERE p.idConversation IN (" +
-            "   SELECT p2.idConversation FROM DmParticipant p2 " +
-            "   WHERE p2.idUser = :userId AND p2.dtLeft IS NULL" +
-            ") " +
-            "AND p.idUser != :userId AND p.dtLeft IS NULL " +
-            "AND p.idConversation IN (" +
-            "   SELECT DISTINCT dm.idConversation FROM DmMessage dm " +
-            "   WHERE dm.dtCreated > :recent OR dm.idConversation IN (" +
-            "       SELECT DISTINCT p3.idConversation FROM DmParticipant p3 " +
-            "       WHERE p3.idUser = :userId AND p3.dtJoined > :recent" +
-            "   )" +
-            ")")
-    List<UUID> findOtherParticipantsInAllDMs(@Param("userId") UUID userId, @Param("recent") OffsetDateTime recent);
+    @Query("""
+        SELECT DISTINCT p2.idUser
+        FROM DmParticipant p1
+        JOIN DmParticipant p2 ON p1.idConversation = p2.idConversation
+        WHERE p1.idUser = :userId
+          AND p1.dtLeft IS NULL
+          AND p2.idUser != :userId
+          AND p2.dtLeft IS NULL
+    """)
+    List<UUID> findOtherParticipantsInAllDMs(@Param("userId") UUID userId);
+
+    @Query(value = """
+        SELECT DISTINCT p2.idUser
+        FROM DmParticipant p1
+        JOIN DmParticipant p2 ON p1.idConversation = p2.idConversation
+        WHERE p1.idUser = :userId
+          AND p1.dtLeft IS NULL
+          AND p2.idUser != :userId
+          AND p2.dtLeft IS NULL
+        LIMIT 500
+    """)
+    Set<UUID> findRecentDMParticipants(@Param("userId") UUID userId);
 }
