@@ -75,11 +75,30 @@ public class AccountController {
     @GetMapping("/@me/presences")
     public ResponseEntity<ApiResponse<List<AccountService.PresenceDto>>> getMyPresences(
             @AuthenticationPrincipal AccordPrincipal principal) {
-        // Remove the try/catch entirely - let it throw
-        return ResponseEntity.ok(ApiResponse.ok(
-                accountService.getRelevantPresences(principal.userId())
-        ));
+        try {
+            return ResponseEntity.ok(ApiResponse.ok(
+                    accountService.getRelevantPresences(principal.userId())
+            ));
+        } catch (Exception e) {
+            // Log full stack trace to see the real error
+            e.printStackTrace();
+            System.err.println("Error type: " + e.getClass().getName());
+            System.err.println("Error message: " + e.getMessage());
+
+            // Check if it's a SQL exception
+            if (e.getCause() != null) {
+                System.err.println("Cause type: " + e.getCause().getClass().getName());
+                System.err.println("Cause message: " + e.getCause().getMessage());
+
+                if (e.getCause().getCause() != null) {
+                    System.err.println("Root cause: " + e.getCause().getCause().getMessage());
+                }
+            }
+
+            throw e; // Re-throw to see in response
+        }
     }
+
     public record PresenceRequest(PresenceStatus presence) {}
 
     @GetMapping("/by-id/{userId}")
