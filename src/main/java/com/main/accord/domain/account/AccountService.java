@@ -69,6 +69,7 @@ public class AccountService {
         Account account = accountRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found."));
         account.setStPresence(presence);
+        account.setStLastSetPresence(presence);
         return accountRepository.save(account);
     }
 
@@ -78,6 +79,15 @@ public class AccountService {
                 .orElseThrow(() -> new NotFoundException("User not found."));
         account.setStNotificationsEnabled(enabled);
         return accountRepository.save(account);
+    }
+
+    @Transactional
+    public void resetToLastPresence(UUID userId) {
+        Account account = accountRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found."));
+        // Reset to last manually set presence (not "invisible" if that's what they had)
+        account.setStPresence(account.getStLastSetPresence());
+        accountRepository.save(account);
     }
 
     public record UpdateProfileRequest(

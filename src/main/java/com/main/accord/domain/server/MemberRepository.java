@@ -51,4 +51,13 @@ public interface MemberRepository extends JpaRepository<Member, Member.MemberId>
             "JOIN Member m2 ON m1.idServer = m2.idServer " +
             "WHERE m1.idUser = :userA AND m2.idUser = :userB")
     List<UUID> findCommonServers(@Param("userA") UUID userA, @Param("userB") UUID userB);
+
+    @Query("""
+        SELECT DISTINCT
+            CASE WHEN f.idUserA = :userId THEN f.idUserB ELSE f.idUserA END
+        FROM Friendship f
+        WHERE (f.idUserA = :userId OR f.idUserB = :userId)
+          AND f.stStatus = 'accepted'
+    """)
+        List<UUID> findFriendIds(@Param("userId") UUID userId);
 }

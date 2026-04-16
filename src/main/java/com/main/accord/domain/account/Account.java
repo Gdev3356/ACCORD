@@ -43,6 +43,12 @@ public class Account {
     private PresenceStatus stPresence = PresenceStatus.online;
 
     @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ST_LAST_SET_PRESENCE")
+    @org.hibernate.annotations.ColumnTransformer(write = "?::presence_status")
+    private PresenceStatus stLastSetPresence = PresenceStatus.online;
+
+    @Builder.Default
     @Column(name = "ST_NOTIFICATIONS_ENABLED")
     private Boolean stNotificationsEnabled = true;
 }
