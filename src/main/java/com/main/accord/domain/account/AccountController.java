@@ -94,4 +94,12 @@ public class AccountController {
                 accountService.getById(userId)
         ));
     }
+
+    @PatchMapping("/@me/presence/auto")
+    public ResponseEntity<ApiResponse<Void>> updatePresenceAuto(
+            @RequestBody PresenceRequest req,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        accountService.updatePresenceAuto(principal.userId(), req.presence());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
 }

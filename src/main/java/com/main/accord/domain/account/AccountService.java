@@ -107,14 +107,6 @@ public class AccountService {
         return accountRepository.save(account);
     }
 
-    @Transactional
-    public void resetToLastPresence(UUID userId) {
-        Account account = accountRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found."));
-        account.setStPresence(account.getStLastSetPresence());
-        accountRepository.save(account);
-    }
-
     public List<PresenceDto> getRelevantPresences(UUID userId) {
         try {
             Set<UUID> ids = new HashSet<>();
@@ -147,6 +139,24 @@ public class AccountService {
         } catch (Exception e) {
             throw new AccordException("Failed to fetch presence data");
         }
+    }
+
+    @Transactional
+    public void updatePresenceAuto(UUID userId, PresenceStatus presence) {
+        if (presence != PresenceStatus.idle && presence != PresenceStatus.online) return;
+
+        Account account = accountRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found."));
+
+        PresenceStatus lastSet = account.getStLastSetPresence();
+
+        // Only auto-transition if the user hasn't explicitly chosen something
+        if (lastSet != null && lastSet != PresenceStatus.online) return;
+
+        account.setStPresence(presence);
+        // stLastSetPresence intentionally NOT touched
+        chatHandler.broadcastPresenceUpdate(userId, presence);
+        accountRepository.save(account);
     }
 
     public record PresenceDto(UUID userId, PresenceStatus presence) {}

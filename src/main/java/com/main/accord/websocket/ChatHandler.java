@@ -47,25 +47,21 @@ public class ChatHandler {
     public void handleSessionConnected(SessionConnectedEvent event) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
         UUID userId = getUserIdFromSession(accessor);
+        if (userId == null) return;
 
-        if (userId != null) {
-            int count = userSessionCount.merge(userId, 1, Integer::sum);
+        userSessionCount.merge(userId, 1, Integer::sum);
 
-            if (count == 1) {
-                // First connection - user came back online
+        Account account = accountRepository.findById(userId).orElse(null);
+        if (account == null) return;
 
-                // Restore last set presence
-                Account account = accountRepository.findById(userId)
-                        .orElseThrow(() -> new RuntimeException("User not found: " + userId));
-
-                PresenceStatus restored = account.getStLastSetPresence() != null
-                        ? account.getStLastSetPresence()
-                        : PresenceStatus.online;
-
-                account.setStPresence(restored);
-                accountRepository.save(account);
-                broadcastPresenceUpdate(userId, restored);
-            }
+        // Always restore if currently offline (handles the race)
+        if (account.getStPresence() == PresenceStatus.offline) {
+            PresenceStatus restored = account.getStLastSetPresence() != null
+                    ? account.getStLastSetPresence()
+                    : PresenceStatus.online;
+            account.setStPresence(restored);
+            accountRepository.save(account);
+            broadcastPresenceUpdate(userId, restored);
         }
     }
 
