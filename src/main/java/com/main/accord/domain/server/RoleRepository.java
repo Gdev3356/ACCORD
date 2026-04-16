@@ -17,6 +17,8 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
 
     boolean existsByIdServerAndDsName(UUID serverId, String dsName);
 
+    Optional<Role> findByIdServerAndDsName(UUID serverId, String dsName);
+
     @Modifying
     @Query("DELETE FROM Role r WHERE r.idRole = :roleId AND r.idServer = :serverId")
     void deleteByIdRoleAndIdServer(UUID roleId, UUID serverId);

@@ -205,6 +205,17 @@ public class InviteService {
             }
         }
 
+        Role everyoneRole = roleRepository.findByIdServerAndDsName(serverId, "@everyone")
+                .orElseThrow(() -> new NotFoundException("@everyone role not found for server " + serverId));
+
+        memberRoleRepository.save(
+                MemberRole.builder()
+                        .idServer(serverId)
+                        .idUser(userId)
+                        .idRole(everyoneRole.getIdRole())
+                        .build()
+        );
+
         // Broadcast to first text channel
         channelRepository.findByIdServerOrderByNrPositionAsc(serverId).stream()
                 .filter(c -> c.getTpChannel() == ChannelType.text)

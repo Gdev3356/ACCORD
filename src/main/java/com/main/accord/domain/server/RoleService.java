@@ -72,6 +72,10 @@ public class RoleService {
         Role role = roleRepository.findByIdRoleAndIdServer(roleId, serverId)
                 .orElseThrow(() -> new NotFoundException("Role not found."));
 
+        if ("@everyone".equals(role.getDsName()) && req.name() != null && !"@everyone".equals(req.name())) {
+            throw new ForbiddenException("The @everyone role cannot be renamed.");
+        }
+
         if (req.name()        != null) role.setDsName(req.name());
         if (req.color()       != null) role.setNrColor(req.color());
         if (req.permissions() != null) role.setNrPermissions(req.permissions());
@@ -87,8 +91,12 @@ public class RoleService {
     public void deleteRole(UUID serverId, UUID roleId, UUID requesterId) {
         assertPermission(requesterId, serverId, Permissions.MANAGE_SERVER);
 
-        roleRepository.findByIdRoleAndIdServer(roleId, serverId)
+        Role role = roleRepository.findByIdRoleAndIdServer(roleId, serverId)
                 .orElseThrow(() -> new NotFoundException("Role not found."));
+
+        if ("@everyone".equals(role.getDsName())) {
+            throw new ForbiddenException("The @everyone role cannot be deleted.");
+        }
 
         roleRepository.deleteByIdRoleAndIdServer(roleId, serverId);
     }
@@ -133,6 +141,13 @@ public class RoleService {
         String roleName = role != null ? role.getDsName() : "Unknown Role";
 
         webhookService.executeRoleRemoveWebhook(serverId, targetUserId, targetName, roleName);
+
+        Role roled = roleRepository.findByIdRoleAndIdServer(roleId, serverId)
+                .orElseThrow(() -> new NotFoundException("Role not found."));
+
+        if ("@everyone".equals(roled.getDsName())) {
+            throw new ForbiddenException("The @everyone role cannot be removed from members.");
+        }
 
         memberRoleRepository.deleteById(pk);
     }
