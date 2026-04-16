@@ -53,11 +53,11 @@ public interface MemberRepository extends JpaRepository<Member, Member.MemberId>
     List<UUID> findCommonServers(@Param("userA") UUID userA, @Param("userB") UUID userB);
 
     @Query("""
-        SELECT DISTINCT
-            CASE WHEN f.idUserA = :userId THEN f.idUserB ELSE f.idUserA END
-        FROM Friendship f
-        WHERE (f.idUserA = :userId OR f.idUserB = :userId)
-          AND f.stStatus = 'accepted'
-    """)
-        List<UUID> findFriendIds(@Param("userId") UUID userId);
+    SELECT DISTINCT
+        CASE WHEN f.idUserA = :userId THEN f.idUserB ELSE f.idUserA END
+    FROM Friendship f
+    WHERE (f.idUserA = :userId OR f.idUserB = :userId)
+      AND f.stStatus = com.main.accord.domain.dm.FriendStatus.accepted
+""")
+    List<UUID> findFriendIds(@Param("userId") UUID userId);
 }
