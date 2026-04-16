@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -45,8 +46,18 @@ public interface ParticipantRepository extends JpaRepository<Participant, Partic
             @Param("userId") UUID userId
     );
 
-    @Query("SELECT DISTINCT p.idUser FROM Participant p WHERE p.idConversation IN " +
-            "(SELECT p2.idConversation FROM Participant p2 WHERE p2.idUser = :userId AND p2.dtLeft IS NULL) " +
-            "AND p.idUser != :userId AND p.dtLeft IS NULL")
-    List<UUID> findOtherParticipantsInAllDMs(@Param("userId") UUID userId);
+    @Query("SELECT DISTINCT p.idUser FROM Participant p " +
+            "WHERE p.idConversation IN (" +
+            "   SELECT p2.idConversation FROM Participant p2 " +
+            "   WHERE p2.idUser = :userId AND p2.dtLeft IS NULL" +
+            ") " +
+            "AND p.idUser != :userId AND p.dtLeft IS NULL " +
+            "AND p.idConversation IN (" +
+            "   SELECT DISTINCT dm.idConversation FROM DmMessage dm " +
+            "   WHERE dm.dtCreated > :recent OR dm.idConversation IN (" +
+            "       SELECT DISTINCT p3.idConversation FROM Participant p3 " +
+            "       WHERE p3.idUser = :userId AND p3.dtJoined > :recent" +
+            "   )" +
+            ")")
+    List<UUID> findOtherParticipantsInAllDMs(@Param("userId") UUID userId, @Param("recent") OffsetDateTime recent);
 }

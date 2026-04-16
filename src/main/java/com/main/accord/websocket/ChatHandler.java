@@ -2,14 +2,12 @@ package com.main.accord.websocket;
 
 import com.main.accord.domain.account.Account;
 import com.main.accord.domain.account.AccountRepository;
-import com.main.accord.domain.account.AccountService;
 import com.main.accord.domain.account.PresenceStatus;
 import com.main.accord.domain.dm.ParticipantRepository;
 import com.main.accord.domain.message.Message;
 import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
@@ -18,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
+import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -27,7 +26,6 @@ public class ChatHandler {
 
     private final SimpMessagingTemplate broker;
     private final MemberRepository memberRepository;
-    private final AccountService accountService;
     private final AccountRepository accountRepository;
     private final ParticipantRepository participantRepository;
 
@@ -46,7 +44,8 @@ public class ChatHandler {
                 // First connection - user came back online
 
                 // Restore last set presence
-                Account account = accountService.getById(userId);
+                Account account = accountRepository.findById(userId)
+                        .orElseThrow(() -> new RuntimeException("User not found: " + userId));
                 account.setStPresence(account.getStLastSetPresence());
                 accountRepository.save(account);
 
@@ -84,8 +83,9 @@ public class ChatHandler {
         // 1. Send to all friends
         List<UUID> friendIds = memberRepository.findFriendIds(userId);
 
+        OffsetDateTime recent = OffsetDateTime.now().minusDays(30);
         // 2. Send to all DM conversation participants
-        List<UUID> dmParticipantIds = participantRepository.findOtherParticipantsInAllDMs(userId);
+        List<UUID> dmParticipantIds = participantRepository.findOtherParticipantsInAllDMs(userId, recent);
 
         // Combine unique user IDs
         Set<UUID> allRecipients = new HashSet<>();
