@@ -2,6 +2,8 @@ package com.main.accord.domain.server;
 
 import com.main.accord.common.ApiResponse;
 import com.main.accord.common.ForbiddenException;
+import com.main.accord.permission.PermissionService;
+import com.main.accord.permission.Permissions;
 import com.main.accord.security.AccordPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ public class RoleController {
     private final RoleService roleService;
     private final MemberRepository memberRepository;
     private final MemberRoleRepository memberRoleRepository;
+    private final PermissionService permissionService;
 
     // GET /api/v1/servers/{serverId}/roles
     @GetMapping
@@ -38,7 +41,9 @@ public class RoleController {
             @PathVariable UUID serverId,
             @Valid @RequestBody RoleService.CreateRoleRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
-
+            if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_SERVER)) {
+                throw new ForbiddenException("You need MANAGE_SERVER permission to create webhooks.");
+            }
         return ResponseEntity.ok(ApiResponse.ok(
                 roleService.createRole(serverId, principal.userId(), req)
         ));
@@ -51,7 +56,9 @@ public class RoleController {
             @PathVariable UUID roleId,
             @Valid @RequestBody RoleService.UpdateRoleRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
-
+            if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_SERVER)) {
+                throw new ForbiddenException("You need MANAGE_SERVER permission to create webhooks.");
+            }
         return ResponseEntity.ok(ApiResponse.ok(
                 roleService.updateRole(serverId, roleId, principal.userId(), req)
         ));
@@ -63,7 +70,9 @@ public class RoleController {
             @PathVariable UUID serverId,
             @PathVariable UUID roleId,
             @AuthenticationPrincipal AccordPrincipal principal) {
-
+            if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_SERVER)) {
+                throw new ForbiddenException("You need MANAGE_SERVER permission to create webhooks.");
+            }
         roleService.deleteRole(serverId, roleId, principal.userId());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
@@ -75,7 +84,9 @@ public class RoleController {
             @PathVariable UUID roleId,
             @PathVariable UUID userId,
             @AuthenticationPrincipal AccordPrincipal principal) {
-
+            if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_SERVER)) {
+                throw new ForbiddenException("You need MANAGE_SERVER permission to create webhooks.");
+            }
         roleService.assignRole(serverId, userId, roleId, principal.userId());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
@@ -100,7 +111,9 @@ public class RoleController {
             @PathVariable UUID roleId,
             @PathVariable UUID userId,
             @AuthenticationPrincipal AccordPrincipal principal) {
-
+            if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_SERVER)) {
+                throw new ForbiddenException("You need MANAGE_SERVER permission to create webhooks.");
+            }
         roleService.revokeRole(serverId, userId, roleId, principal.userId());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }

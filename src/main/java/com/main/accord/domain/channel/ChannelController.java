@@ -1,6 +1,9 @@
 package com.main.accord.domain.channel;
 
 import com.main.accord.common.ApiResponse;
+import com.main.accord.common.ForbiddenException;
+import com.main.accord.permission.PermissionService;
+import com.main.accord.permission.Permissions;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +19,7 @@ import java.util.UUID;
 public class ChannelController {
 
     private final ChannelService channelService;
+    private final PermissionService permissionService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<Channel>>> getChannels(
@@ -31,6 +35,9 @@ public class ChannelController {
             @PathVariable UUID serverId,
             @RequestBody ChannelService.CreateChannelRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
+            if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_CHANNELS)) {
+                throw new ForbiddenException("You need MANAGE_CHANNELS permission to create channels.");
+            }
         return ResponseEntity.ok(ApiResponse.ok(
                 channelService.createChannel(serverId, principal.userId(), req)
         ));
@@ -42,6 +49,9 @@ public class ChannelController {
             @PathVariable UUID channelId,
             @RequestBody ChannelService.UpdateChannelRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
+            if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_CHANNELS)) {
+                throw new ForbiddenException("You need MANAGE_CHANNELS permission to create channels.");
+            }
         return ResponseEntity.ok(ApiResponse.ok(
                 channelService.updateChannel(serverId, channelId, principal.userId(), req)
         ));
@@ -52,6 +62,9 @@ public class ChannelController {
             @PathVariable UUID serverId,
             @PathVariable UUID channelId,
             @AuthenticationPrincipal AccordPrincipal principal) {
+            if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_CHANNELS)) {
+                throw new ForbiddenException("You need MANAGE_CHANNELS permission to create channels.");
+            }
         channelService.deleteChannel(serverId, channelId, principal.userId());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }

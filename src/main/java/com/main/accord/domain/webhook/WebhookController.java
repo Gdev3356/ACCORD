@@ -1,6 +1,9 @@
 package com.main.accord.domain.webhook;
 
 import com.main.accord.common.ApiResponse;
+import com.main.accord.common.ForbiddenException;
+import com.main.accord.permission.PermissionService;
+import com.main.accord.permission.Permissions;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +20,7 @@ import java.util.UUID;
 public class WebhookController {
 
     private final WebhookService webhookService;
+    private final PermissionService permissionService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<Webhook>>> getWebhooks(
@@ -32,6 +36,9 @@ public class WebhookController {
             @PathVariable UUID serverId,
             @RequestBody CreateWebhookRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
+            if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_SERVER)) {
+                throw new ForbiddenException("You need MANAGE_SERVER permission to create webhooks.");
+            }
         return ResponseEntity.ok(ApiResponse.ok(
                 webhookService.createWebhook(
                         serverId, req.channelId(), principal.userId(),
@@ -47,6 +54,9 @@ public class WebhookController {
             @PathVariable UUID webhookId,
             @RequestBody WebhookService.UpdateWebhookRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
+        if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_SERVER)) {
+            throw new ForbiddenException("You need MANAGE_SERVER permission to create webhooks.");
+        }
         return ResponseEntity.ok(ApiResponse.ok(
                 webhookService.updateWebhook(webhookId, principal.userId(), req)
         ));
@@ -57,6 +67,9 @@ public class WebhookController {
             @PathVariable UUID serverId,
             @PathVariable UUID webhookId,
             @AuthenticationPrincipal AccordPrincipal principal) {
+        if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_SERVER)) {
+            throw new ForbiddenException("You need MANAGE_SERVER permission to create webhooks.");
+        }
         webhookService.deleteWebhook(webhookId, principal.userId());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }

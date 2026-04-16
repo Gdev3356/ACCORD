@@ -1,6 +1,8 @@
 package com.main.accord.domain.server;
 
 import com.main.accord.common.ApiResponse;
+import com.main.accord.permission.PermissionService;
+import com.main.accord.permission.Permissions;
 import com.main.accord.security.AccordPrincipal;
 import com.main.accord.common.ForbiddenException;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import java.util.UUID;
 public class ServerController {
 
     private final ServerService serverService;
+    private final PermissionService permissionService;
 
     // GET /api/v1/servers
     @GetMapping
@@ -54,6 +57,9 @@ public class ServerController {
             @PathVariable UUID serverId,
             @RequestBody ServerService.UpdateServerRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
+        if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_SERVER)) {
+            throw new ForbiddenException("You need MANAGE_SERVER permission to update server settings.");
+        }
         return ResponseEntity.ok(ApiResponse.ok(
                 serverService.updateServer(serverId, principal.userId(), req)
         ));
@@ -64,6 +70,9 @@ public class ServerController {
     public ResponseEntity<ApiResponse<Void>> deleteServer(
             @PathVariable UUID serverId,
             @AuthenticationPrincipal AccordPrincipal principal) {
+        if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_SERVER)) {
+            throw new ForbiddenException("You need MANAGE_SERVER permission to delete this server.");
+        }
         serverService.deleteServer(serverId, principal.userId());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
@@ -85,6 +94,9 @@ public class ServerController {
             @PathVariable UUID userId,
             @RequestBody(required = false) Map<String, String> body,
             @AuthenticationPrincipal AccordPrincipal principal) {
+        if (!permissionService.can(principal.userId(), null, serverId, Permissions.KICK_MEMBERS)) {
+            throw new ForbiddenException("You need KICK_MEMBERS permission to kick members.");
+        }
 
         String reason = body != null ? body.get("reason") : null;
         serverService.kickMember(principal.userId(), serverId, userId, reason);
@@ -116,6 +128,9 @@ public class ServerController {
             @PathVariable UUID userId,
             @RequestBody ServerService.UpdateMemberRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
+        if (!permissionService.can(principal.userId(), null, serverId, Permissions.MUTE_MEMBERS)) {
+            throw new ForbiddenException("You need MUTE_MEMBERS permission to mute members.");
+        }
         return ResponseEntity.ok(ApiResponse.ok(
                 serverService.updateMember(principal.userId(), serverId, userId, req)
         ));
@@ -127,6 +142,9 @@ public class ServerController {
             @PathVariable UUID userId,
             @RequestBody TimeoutRequest request,
             @AuthenticationPrincipal AccordPrincipal principal) {
+        if (!permissionService.can(principal.userId(), null, serverId, Permissions.TIMEOUT_MEMBERS)) {
+            throw new ForbiddenException("You need TIMEOUT_MEMBERS permission to timeout members.");
+        }
 
         return ResponseEntity.ok(ApiResponse.ok(
                 serverService.timeoutMember(principal.userId(), serverId, userId,
@@ -139,6 +157,9 @@ public class ServerController {
             @PathVariable UUID serverId,
             @PathVariable UUID userId,
             @AuthenticationPrincipal AccordPrincipal principal) {
+        if (!permissionService.can(principal.userId(), null, serverId, Permissions.TIMEOUT_MEMBERS)) {
+            throw new ForbiddenException("You need TIMEOUT_MEMBERS permission to remove timeouts.");
+        }
 
         serverService.removeTimeout(principal.userId(), serverId, userId);
         return ResponseEntity.ok(ApiResponse.ok(null));
@@ -154,6 +175,7 @@ public class ServerController {
                 serverService.getMyPermissions(principal.userId(), serverId)
         ));
     }
+
     public record CreateServerRequest(String name) {}
 
     // GET /api/v1/servers/{serverId}/members/{userId}
@@ -184,6 +206,9 @@ public class ServerController {
             @PathVariable UUID userId,
             @RequestBody NicknameRequest request,
             @AuthenticationPrincipal AccordPrincipal principal) {
+        if (!permissionService.can(principal.userId(), null, serverId, Permissions.MANAGE_NICKNAMES)) {
+            throw new ForbiddenException("You need MANAGE_NICKNAMES permission to change nicknames.");
+        }
 
         return ResponseEntity.ok(ApiResponse.ok(
                 serverService.changeNickname(serverId, userId, principal.userId(), request.nickname())
