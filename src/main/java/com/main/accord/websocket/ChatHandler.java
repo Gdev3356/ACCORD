@@ -148,6 +148,11 @@ public class ChatHandler {
                     "data", Map.of("userId", userId, "presence", "offline")
             ));
         }
+        Account account = accountRepository.findById(userId).orElse(null);
+        if (account != null) {
+            account.setStPresence(PresenceStatus.offline);
+            accountRepository.save(account);
+        }
     }
 
     public void broadcastToChannel(UUID channelId, Object payload) {
