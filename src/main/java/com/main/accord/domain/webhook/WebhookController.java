@@ -8,6 +8,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -34,7 +35,8 @@ public class WebhookController {
         return ResponseEntity.ok(ApiResponse.ok(
                 webhookService.createWebhook(
                         serverId, req.channelId(), principal.userId(),
-                        req.name(), req.avatarUrl(), req.bio(), req.bannerUrl(), req.color(), req.eventType(), req.messageTemplate()
+                        req.name(), req.avatarUrl(), req.bio(), req.bannerUrl(), req.color(),
+                        req.events(), req.templates()
                 )
         ));
     }
@@ -43,7 +45,7 @@ public class WebhookController {
     public ResponseEntity<ApiResponse<Webhook>> updateWebhook(
             @PathVariable UUID serverId,
             @PathVariable UUID webhookId,
-            @RequestBody UpdateWebhookRequest req,
+            @RequestBody WebhookService.UpdateWebhookRequest req,
             @AuthenticationPrincipal AccordPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
                 webhookService.updateWebhook(webhookId, principal.userId(), req)
@@ -66,19 +68,7 @@ public class WebhookController {
             String bio,
             String bannerUrl,
             Integer color,
-            String eventType,
-            String messageTemplate
-    ) {}
-
-    public record UpdateWebhookRequest(
-            String name,
-            UUID channelId,
-            String avatarUrl,
-            String bio,
-            String bannerUrl,
-            Integer color,
-            String eventType,
-            String messageTemplate,
-            Boolean active
+            List<String> events,
+            Map<String, String> templates
     ) {}
 }
