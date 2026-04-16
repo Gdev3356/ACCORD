@@ -38,6 +38,7 @@ public class ServerService {
     private final AccountRepository  accountRepository;
     private final WebhookService     webhookService;
     private final VisualsRepository visualsRepository;
+    private final MemberRoleRepository memberRoleRepository;
 
     // ── List ──────────────────────────────────────────────────────────────────
 
@@ -64,35 +65,62 @@ public class ServerService {
 
     @Transactional
     public Server createServer(UUID ownerId, String name) {
-        long allPermissions =
-                Permissions.VIEW_CHANNELS |
-                        Permissions.SEND_MESSAGES |
-                        Permissions.READ_MESSAGE_HISTORY |
-                        Permissions.ATTACH_FILES |
-                        Permissions.EMBED_LINKS |
-                        Permissions.KICK_MEMBERS |
-                        Permissions.BAN_MEMBERS |
-                        Permissions.MANAGE_SERVER |
-                        Permissions.MANAGE_CHANNELS |
-                        Permissions.MUTE_MEMBERS |
-                        Permissions.DEAFEN_MEMBERS |
-                        Permissions.MOVE_MEMBERS |
-                        Permissions.MANAGE_MESSAGES |
-                        Permissions.MENTION_EVERYONE |
-                        Permissions.SEND_TTS;
-
+        // Server with 0 permissions
         Server server = serverRepository.save(
                 Server.builder()
                         .idOwner(ownerId)
                         .dsName(name)
-                        .nrPermissions(allPermissions)
+                        .nrPermissions(0L)
                         .build()
         );
 
+        // Add owner as member
         memberRepository.save(
                 Member.builder()
                         .idServer(server.getIdServer())
                         .idUser(ownerId)
+                        .build()
+        );
+
+        // Create @everyone role
+        long everyonePermissions = Permissions.VIEW_CHANNELS |
+                Permissions.SEND_MESSAGES |
+                Permissions.READ_MESSAGE_HISTORY;
+
+        Role everyoneRole = roleRepository.save(
+                Role.builder()
+                        .idServer(server.getIdServer())
+                        .dsName("@everyone")
+                        .nrPermissions(everyonePermissions)
+                        .nrPosition((short) 0)
+                        .build()
+        );
+
+        // Assign @everyone to owner
+        memberRoleRepository.save(
+                MemberRole.builder()
+                        .idServer(server.getIdServer())
+                        .idUser(ownerId)
+                        .idRole(everyoneRole.getIdRole())
+                        .build()
+        );
+
+        // Create Admin role for owner (optional but recommended)
+        Role adminRole = roleRepository.save(
+                Role.builder()
+                        .idServer(server.getIdServer())
+                        .dsName("Admin")
+                        .nrPermissions(Permissions.ADMINISTRATOR)  // Just the ADMIN bit!
+                        .nrPosition((short) 100)  // High position
+                        .build()
+        );
+
+        // Assign Admin role to owner
+        memberRoleRepository.save(
+                MemberRole.builder()
+                        .idServer(server.getIdServer())
+                        .idUser(ownerId)
+                        .idRole(adminRole.getIdRole())
                         .build()
         );
 
