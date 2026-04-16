@@ -183,14 +183,13 @@ public class InviteService {
         List<Map<String, Object>> memberRoles = getMemberRoles(serverId, userId);
 
         // Prepare member data
-        Map<String, Object> memberData = Map.of(
-                "userId", userId.toString(),
-                "displayName", displayName,
-                "handle", handle,
-                "pfpUrl", pfpUrl,
-                "nickname", (String) null,
-                "roles", memberRoles
-        );
+        Map<String, Object> memberData = new java.util.HashMap<>();
+        memberData.put("userId", userId.toString());
+        memberData.put("displayName", displayName);
+        memberData.put("handle", handle);
+        memberData.put("pfpUrl", pfpUrl);
+        memberData.put("nickname", null);
+        memberData.put("roles", memberRoles);
 
         // Trigger webhook
         webhookService.executeMemberJoinWebhooks(serverId, userId, displayName, handle);

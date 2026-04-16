@@ -11,6 +11,7 @@ import com.main.accord.domain.server.Server;
 import com.main.accord.domain.server.ServerRepository;
 import com.main.accord.permission.PermissionService;
 import com.main.accord.permission.Permissions;
+import com.main.accord.security.EncryptionService;
 import com.main.accord.websocket.ChatHandler;
 import com.main.accord.domain.account.AccountRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class WebhookService {
     private final MessageRepository messageRepository;
     private final ChatHandler chatHandler;
     private final AccountRepository accountRepository;
+    private final EncryptionService encryptionService;
 
     @Transactional
     public Webhook createWebhook(UUID serverId, UUID channelId, UUID creatorId,
@@ -92,28 +94,6 @@ public class WebhookService {
         }
     }
 
-    @Transactional
-    public void executeDmStartWebhook(UUID conversationId, UUID userAId, UUID userBId,
-                                      String userADisplayName, String userBDisplayName) {
-        // Find servers where BOTH users are members
-        List<UUID> commonServerIds = memberRepository.findCommonServers(userAId, userBId);
-
-        if (commonServerIds.isEmpty()) return;
-
-        // Get active DM_START webhooks ONLY in those common servers
-        List<Webhook> webhooks = webhookRepository.findByServerIdsAndEventAndActiveTrue(commonServerIds, "DM_START");
-
-        for (Webhook webhook : webhooks) {
-            executeWebhook(webhook, Map.of(
-                    "user1", userADisplayName,
-                    "user2", userBDisplayName,
-                    "user1_id", userAId.toString(),
-                    "user2_id", userBId.toString(),
-                    "conversation_id", conversationId.toString()
-            ));
-        }
-    }
-
     private void executeWebhook(Webhook webhook, Map<String, String> variables) {
         try {
             String content = interpolateMessage(webhook.getDsMessageTemplate(), variables);
@@ -121,8 +101,8 @@ public class WebhookService {
             Message saved = messageRepository.save(
                     Message.builder()
                             .idChannel(webhook.getIdChannel())
-                            .idAuthor(null)          // system/webhook
-                            .dsContent(content)      // no encryption needed for system msgs, or encrypt here
+                            .idAuthor(null)
+                            .dsContent(encryptionService.encrypt(content))
                             .tpMessage("webhook")
                             .build()
             );
@@ -192,14 +172,18 @@ public class WebhookService {
         return webhookRepository.save(webhook);
     }
 
-    public void executeMemberLeaveWebhooks(UUID serverId, UUID userId, String userDisplayName) {
-        List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "MEMBER_JOIN");
+    public void executeMemberLeaveWebhooks(UUID serverId, UUID userId,
+                                           String userDisplayName, String userHandle) { // ← add handle
+        List<Webhook> webhooks = webhookRepository
+                .findByIdServerAndTpEventAndStActiveTrue(serverId, "MEMBER_JOIN");
 
         for (Webhook webhook : webhooks) {
             executeWebhook(webhook, Map.of(
-                    "user", userDisplayName,
-                    "server", getServerName(serverId),
-                    "action", "left"
+                    "user",        userDisplayName,
+                    "user_handle", userHandle,      // ← add
+                    "user_id",     userId.toString(),
+                    "server",      getServerName(serverId),
+                    "action",      "left"
             ));
         }
     }

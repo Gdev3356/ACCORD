@@ -191,10 +191,11 @@ public class ServerService {
 
         Account account = accountRepository.findById(userId).orElse(null);
         String userDisplayName = account != null ? account.getDsDisplayName() : "User";
+        String userHandle = account != null ? account.getDsHandle() : "@handle";
 
         memberRepository.deleteByIdServerAndIdUser(serverId, userId);
 
-        webhookService.executeMemberLeaveWebhooks(serverId, userId, userDisplayName);
+        webhookService.executeMemberLeaveWebhooks(serverId, userId, userDisplayName, userHandle);
     }
 
     // ── Timeout Member ────────────────────────────────────────────────────────
