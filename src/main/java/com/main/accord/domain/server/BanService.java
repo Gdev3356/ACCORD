@@ -71,8 +71,7 @@ public class BanService {
             memberRepository.deleteByIdServerAndIdUser(serverId, targetId);
         }
 
-        webhookService.executeMemberModerationWebhook(serverId, targetId, requesterId,
-                targetName, moderatorName, "banned", reason);
+        webhookService.executeMemberBanWebhook(serverId, targetId, requesterId, targetName, moderatorName, reason);
 
         // Persist a notification record AND push it over WebSocket before their session drops
         notificationService.send(

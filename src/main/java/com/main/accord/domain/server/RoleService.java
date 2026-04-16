@@ -117,7 +117,7 @@ public class RoleService {
             String targetName = targetAccount != null ? targetAccount.getDsDisplayName() : "User";
             String roleName = role != null ? role.getDsName() : "Unknown Role";
 
-            webhookService.executeMemberRoleWebhook(serverId, targetUserId, targetName, roleName, "added");
+            webhookService.executeRoleAddWebhook(serverId, targetUserId, targetName, roleName);
         }
     }
 
@@ -132,7 +132,7 @@ public class RoleService {
         String targetName = targetAccount != null ? targetAccount.getDsDisplayName() : "User";
         String roleName = role != null ? role.getDsName() : "Unknown Role";
 
-        webhookService.executeMemberRoleWebhook(serverId, targetUserId, targetName, roleName, "removed");
+        webhookService.executeRoleRemoveWebhook(serverId, targetUserId, targetName, roleName);
 
         memberRoleRepository.deleteById(pk);
     }

@@ -34,7 +34,7 @@ public class WebhookController {
         return ResponseEntity.ok(ApiResponse.ok(
                 webhookService.createWebhook(
                         serverId, req.channelId(), principal.userId(),
-                        req.name(), req.avatarUrl(), req.eventType(), req.messageTemplate()
+                        req.name(), req.avatarUrl(), req.bio(), req.bannerUrl(), req.color(), req.eventType(), req.messageTemplate()
                 )
         ));
     }
@@ -63,6 +63,9 @@ public class WebhookController {
             UUID channelId,
             String name,
             String avatarUrl,
+            String bio,
+            String bannerUrl,
+            Integer color,
             String eventType,
             String messageTemplate
     ) {}
@@ -71,6 +74,9 @@ public class WebhookController {
             String name,
             UUID channelId,
             String avatarUrl,
+            String bio,
+            String bannerUrl,
+            Integer color,
             String eventType,
             String messageTemplate,
             Boolean active

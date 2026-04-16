@@ -30,6 +30,15 @@ public class Webhook {
     @Column(name = "DS_AVATAR_URL")
     private String dsAvatarUrl;
 
+    @Column(name = "DS_BIO")
+    private String dsBio;
+
+    @Column(name = "DS_BANNER_URL")
+    private String dsBannerUrl;
+
+    @Column(name = "NR_COLOR")
+    private Integer nrColor;
+
     @Column(name = "TP_EVENT", nullable = false, length = 50)
     private String tpEvent; // "MEMBER_JOIN", "DM_START"
 

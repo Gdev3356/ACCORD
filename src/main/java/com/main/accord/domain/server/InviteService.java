@@ -192,7 +192,7 @@ public class InviteService {
         memberData.put("roles", memberRoles);
 
         // Trigger webhook
-        webhookService.executeMemberJoinWebhooks(serverId, userId, displayName, handle);
+        webhookService.executeMemberJoinWebhook(serverId, userId, displayName, handle, pfpUrl);
 
         // Broadcast to all server members
         List<Member> allMembers = memberRepository.findByIdServer(serverId);

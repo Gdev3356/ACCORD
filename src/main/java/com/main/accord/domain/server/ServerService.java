@@ -151,8 +151,7 @@ public class ServerService {
 
         memberRepository.deleteByIdServerAndIdUser(serverId, targetId);
 
-        webhookService.executeMemberModerationWebhook(serverId, targetId, requesterId,
-                targetName, moderatorName, "kicked", reason);
+        webhookService.executeMemberKickWebhook(serverId, targetId, requesterId, targetName, moderatorName, reason);
 
         chatHandler.sendToUser(targetId, Map.of(
                 "type", "SERVER_KICK",
@@ -229,8 +228,7 @@ public class ServerService {
         String targetName = targetAccount != null ? targetAccount.getDsDisplayName() : "User";
         String moderatorName = moderatorAccount != null ? moderatorAccount.getDsDisplayName() : "Moderator";
 
-        webhookService.executeMemberModerationWebhook(serverId, targetId, requesterId,
-                targetName, moderatorName, "timed out", reason + " (" + durationMinutes + " minutes)");
+        webhookService.executeMemberTimeoutWebhook(serverId, targetId, requesterId, targetName, moderatorName, durationMinutes, reason);
 
         // WebSocket notification
         chatHandler.sendToUser(targetId, Map.of(

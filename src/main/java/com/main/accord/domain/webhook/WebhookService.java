@@ -1,5 +1,6 @@
 package com.main.accord.domain.webhook;
 
+import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
 import com.main.accord.domain.channel.Channel;
@@ -15,7 +16,6 @@ import com.main.accord.security.EncryptionService;
 import com.main.accord.websocket.ChatHandler;
 import com.main.accord.domain.account.AccountRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class WebhookService {
@@ -38,50 +37,12 @@ public class WebhookService {
     private final AccountRepository accountRepository;
     private final EncryptionService encryptionService;
 
-    @Transactional
-    public Webhook createWebhook(UUID serverId, UUID channelId, UUID creatorId,
-                                 String name, String avatarUrl, String eventType,
-                                 String messageTemplate) {
-        // Check permission
-        if (!permissionService.can(creatorId, null, serverId, Permissions.MANAGE_SERVER)) {
-            throw new ForbiddenException("You need MANAGE_SERVER permission to create webhooks.");
-        }
+    // ──────────────────────────────────────────────────────────────────────
+    // MEMBER JOIN (separate from leave)
+    // ──────────────────────────────────────────────────────────────────────
 
-        // Verify channel exists and belongs to server
-        Channel channel = channelRepository.findById(channelId)
-                .orElseThrow(() -> new NotFoundException("Channel not found."));
-
-        if (!channel.getIdServer().equals(serverId)) {
-            throw new ForbiddenException("Channel does not belong to this server.");
-        }
-
-        Webhook webhook = Webhook.builder()
-                .idServer(serverId)
-                .idChannel(channelId)
-                .dsName(name)
-                .dsAvatarUrl(avatarUrl)
-                .tpEvent(eventType)
-                .dsMessageTemplate(messageTemplate)
-                .stActive(true)
-                .build();
-
-        return webhookRepository.save(webhook);
-    }
-
-    @Transactional
-    public void deleteWebhook(UUID webhookId, UUID userId) {
-        Webhook webhook = webhookRepository.findById(webhookId)
-                .orElseThrow(() -> new NotFoundException("Webhook not found."));
-
-        if (!permissionService.can(userId, null, webhook.getIdServer(), Permissions.MANAGE_SERVER)) {
-            throw new ForbiddenException("You need MANAGE_SERVER permission to delete webhooks.");
-        }
-
-        webhookRepository.delete(webhook);
-    }
-
-    @Transactional
-    public void executeMemberJoinWebhooks(UUID serverId, UUID userId, String userDisplayName, String userHandle) {
+    public void executeMemberJoinWebhook(UUID serverId, UUID userId,
+                                         String userDisplayName, String userHandle, String pfpUrl) {
         List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "MEMBER_JOIN");
 
         for (Webhook webhook : webhooks) {
@@ -89,10 +50,105 @@ public class WebhookService {
                     "user", userDisplayName,
                     "user_handle", userHandle,
                     "user_id", userId.toString(),
+                    "user_avatar", pfpUrl,
                     "server", getServerName(serverId)
             ));
         }
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // MEMBER KICK
+    // ──────────────────────────────────────────────────────────────────────
+
+    public void executeMemberKickWebhook(UUID serverId, UUID targetId, UUID moderatorId,
+                                         String targetName, String moderatorName, String reason) {
+        List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "MEMBER_KICK");
+
+        for (Webhook webhook : webhooks) {
+            executeWebhook(webhook, Map.of(
+                    "user", targetName,
+                    "moderator", moderatorName,
+                    "server", getServerName(serverId),
+                    "reason", reason != null ? reason : ""
+            ));
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // MEMBER BAN
+    // ──────────────────────────────────────────────────────────────────────
+
+    public void executeMemberBanWebhook(UUID serverId, UUID targetId, UUID moderatorId,
+                                        String targetName, String moderatorName, String reason) {
+        List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "MEMBER_BAN");
+
+        for (Webhook webhook : webhooks) {
+            executeWebhook(webhook, Map.of(
+                    "user", targetName,
+                    "moderator", moderatorName,
+                    "server", getServerName(serverId),
+                    "reason", reason != null ? reason : ""
+            ));
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // MEMBER TIMEOUT
+    // ──────────────────────────────────────────────────────────────────────
+
+    public void executeMemberTimeoutWebhook(UUID serverId, UUID targetId, UUID moderatorId,
+                                            String targetName, String moderatorName,
+                                            int durationMinutes, String reason) {
+        List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "MEMBER_TIMEOUT");
+
+        for (Webhook webhook : webhooks) {
+            executeWebhook(webhook, Map.of(
+                    "user", targetName,
+                    "moderator", moderatorName,
+                    "duration", String.valueOf(durationMinutes),
+                    "server", getServerName(serverId),
+                    "reason", reason != null ? reason : ""
+            ));
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // ROLE ADD
+    // ──────────────────────────────────────────────────────────────────────
+
+    public void executeRoleAddWebhook(UUID serverId, UUID userId,
+                                      String userDisplayName, String roleName) {
+        List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "ROLE_ADD");
+
+        for (Webhook webhook : webhooks) {
+            executeWebhook(webhook, Map.of(
+                    "user", userDisplayName,
+                    "role", roleName,
+                    "server", getServerName(serverId)
+            ));
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // ROLE REMOVE
+    // ──────────────────────────────────────────────────────────────────────
+
+    public void executeRoleRemoveWebhook(UUID serverId, UUID userId,
+                                         String userDisplayName, String roleName) {
+        List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "ROLE_REMOVE");
+
+        for (Webhook webhook : webhooks) {
+            executeWebhook(webhook, Map.of(
+                    "user", userDisplayName,
+                    "role", roleName,
+                    "server", getServerName(serverId)
+            ));
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Helper Methods
+    // ──────────────────────────────────────────────────────────────────────
 
     private void executeWebhook(Webhook webhook, Map<String, String> variables) {
         try {
@@ -104,14 +160,20 @@ public class WebhookService {
                             .idAuthor(null)
                             .dsContent(encryptionService.encrypt(content))
                             .tpMessage("webhook")
+                            .jsActivity(Map.of(  // ← Store webhook metadata
+                                    "webhookName", webhook.getDsName(),
+                                    "webhookAvatar", webhook.getDsAvatarUrl(),
+                                    "webhookBio", webhook.getDsBio(),
+                                    "webhookBanner", webhook.getDsBannerUrl(),
+                                    "webhookColor", webhook.getNrColor()
+                            ))
                             .build()
             );
 
             chatHandler.broadcastToChannel(webhook.getIdChannel(), saved);
-            log.debug("Webhook executed in channel {}: {}", webhook.getIdChannel(), content);
 
         } catch (Exception e) {
-            log.error("Failed to execute webhook {}: {}", webhook.getIdWebhook(), e.getMessage());
+            throw new AccordException("Not a valid message");
         }
     }
 
@@ -127,13 +189,6 @@ public class WebhookService {
         return serverRepository.findById(serverId)
                 .map(Server::getDsName)
                 .orElse("Unknown Server");
-    }
-
-    public List<Webhook> getServerWebhooks(UUID serverId, UUID requesterId) {
-        if (!permissionService.can(requesterId, null, serverId, Permissions.MANAGE_SERVER)) {
-            throw new ForbiddenException("You need MANAGE_SERVER permission to view webhooks.");
-        }
-        return webhookRepository.findByIdServerAndStActiveTrue(serverId);
     }
 
     @Transactional
@@ -188,35 +243,56 @@ public class WebhookService {
         }
     }
 
-    public void executeMemberModerationWebhook(UUID serverId, UUID targetId, UUID moderatorId,
-                                               String targetName, String moderatorName,
-                                               String action, String reason) {
-        List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "MEMBER_MODERATION");
-
-        String reasonText = (reason != null && !reason.isEmpty()) ? " Reason: " + reason : "";
-
-        for (Webhook webhook : webhooks) {
-            executeWebhook(webhook, Map.of(
-                    "user", targetName,
-                    "moderator", moderatorName,
-                    "server", getServerName(serverId),
-                    "action", action,
-                    "reason", reasonText
-            ));
+    public List<Webhook> getServerWebhooks(UUID serverId, UUID requesterId) {
+        if (!permissionService.can(requesterId, null, serverId, Permissions.MANAGE_SERVER)) {
+            throw new ForbiddenException("You need MANAGE_SERVER permission to view webhooks.");
         }
+        return webhookRepository.findByIdServerAndStActiveTrue(serverId);
     }
 
-    public void executeMemberRoleWebhook(UUID serverId, UUID userId, String userDisplayName,
-                                         String roleName, String action) {
-        List<Webhook> webhooks = webhookRepository.findByIdServerAndTpEventAndStActiveTrue(serverId, "MEMBER_ROLE");
+    @Transactional
+    public void deleteWebhook(UUID webhookId, UUID userId) {
+        Webhook webhook = webhookRepository.findById(webhookId)
+                .orElseThrow(() -> new NotFoundException("Webhook not found."));
 
-        for (Webhook webhook : webhooks) {
-            executeWebhook(webhook, Map.of(
-                    "user", userDisplayName,
-                    "role", roleName,
-                    "server", getServerName(serverId),
-                    "action", action
-            ));
+        if (!permissionService.can(userId, null, webhook.getIdServer(), Permissions.MANAGE_SERVER)) {
+            throw new ForbiddenException("You need MANAGE_SERVER permission to delete webhooks.");
         }
+
+        webhookRepository.delete(webhook);
+    }
+
+    @Transactional
+    public Webhook createWebhook(UUID serverId, UUID channelId, UUID creatorId,
+                                 String name, String avatarUrl, String bio,
+                                 String bannerUrl, Integer color, String eventType,
+                                 String messageTemplate) {
+        // Check permission
+        if (!permissionService.can(creatorId, null, serverId, Permissions.MANAGE_SERVER)) {
+            throw new ForbiddenException("You need MANAGE_SERVER permission to create webhooks.");
+        }
+
+        // Verify channel exists and belongs to server
+        Channel channel = channelRepository.findById(channelId)
+                .orElseThrow(() -> new NotFoundException("Channel not found."));
+
+        if (!channel.getIdServer().equals(serverId)) {
+            throw new ForbiddenException("Channel does not belong to this server.");
+        }
+
+        Webhook webhook = Webhook.builder()
+                .idServer(serverId)
+                .idChannel(channelId)
+                .dsName(name)
+                .dsAvatarUrl(avatarUrl)
+                .dsBio(bio)
+                .dsBannerUrl(bannerUrl)
+                .nrColor(color)
+                .tpEvent(eventType)
+                .dsMessageTemplate(messageTemplate)
+                .stActive(true)
+                .build();
+
+        return webhookRepository.save(webhook);
     }
 }
