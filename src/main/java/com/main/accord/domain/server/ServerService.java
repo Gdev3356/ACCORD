@@ -3,8 +3,7 @@ package com.main.accord.domain.server;
 import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
-import com.main.accord.domain.account.Account;
-import com.main.accord.domain.account.AccountRepository;
+import com.main.accord.domain.account.*;
 import com.main.accord.domain.channel.ChReadStateRepository;
 import com.main.accord.domain.notification.NotifType;
 import com.main.accord.domain.notification.NotificationService;
@@ -38,6 +37,7 @@ public class ServerService {
     private final ChReadStateRepository chReadStateRepository;
     private final AccountRepository  accountRepository;
     private final WebhookService     webhookService;
+    private final VisualsRepository visualsRepository;
 
     // ── List ──────────────────────────────────────────────────────────────────
 
@@ -189,12 +189,16 @@ public class ServerService {
         }
 
         Account account = accountRepository.findById(userId).orElse(null);
+        Visuals visuals = visualsRepository.findById(userId).orElse(null);
         String userDisplayName = account != null ? account.getDsDisplayName() : "User";
         String userHandle = account != null ? account.getDsHandle() : "@handle";
+        String pfpUrl = (visuals != null && visuals.getDsPfpUrl() != null)
+                ? visuals.getDsPfpUrl()
+                : "https://i.imgur.com/eTh2muI.png";
 
         memberRepository.deleteByIdServerAndIdUser(serverId, userId);
 
-        webhookService.executeMemberLeaveWebhooks(serverId, userId, userDisplayName, userHandle);
+        webhookService.executeMemberLeaveWebhook(serverId, userId, userDisplayName, userHandle, pfpUrl);
     }
 
     // ── Timeout Member ────────────────────────────────────────────────────────
