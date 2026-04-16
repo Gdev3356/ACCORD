@@ -2,6 +2,7 @@ package com.main.accord.domain.account;
 
 import com.main.accord.common.AccordException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import java.util.UUID;
 public class AccountService {
 
     private final AccountRepository accountRepository;
+    private final ChatHandler chatHandler;
 
     public Account getByHandle(String handle) {
         return accountRepository.findByDsHandleIgnoreCase(handle)
@@ -70,6 +72,7 @@ public class AccountService {
                 .orElseThrow(() -> new NotFoundException("User not found."));
         account.setStPresence(presence);
         account.setStLastSetPresence(presence);
+        chatHandler.broadcastPresenceUpdate(userId, presence);
         return accountRepository.save(account);
     }
 

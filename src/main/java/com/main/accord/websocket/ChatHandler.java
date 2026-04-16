@@ -4,6 +4,7 @@ import com.main.accord.domain.account.Account;
 import com.main.accord.domain.account.AccountRepository;
 import com.main.accord.domain.account.AccountService;
 import com.main.accord.domain.account.PresenceStatus;
+import com.main.accord.domain.dm.ParticipantRepository;
 import com.main.accord.domain.message.Message;
 import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.security.AccordPrincipal;
@@ -17,9 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -30,6 +29,7 @@ public class ChatHandler {
     private final MemberRepository memberRepository;
     private final AccountService accountService;
     private final AccountRepository accountRepository;
+    private final ParticipantRepository participantRepository;
 
     // Track active user sessions
     private final Map<UUID, Integer> userSessionCount = new ConcurrentHashMap<>();
@@ -79,14 +79,27 @@ public class ChatHandler {
         return null;
     }
 
-    private void broadcastPresenceUpdate(UUID userId, PresenceStatus presence) {
-        // Send to all friends and servers where user is a member
+    public void broadcastPresenceUpdate(UUID userId, PresenceStatus presence) {
+
+        // 1. Send to all friends
         List<UUID> friendIds = memberRepository.findFriendIds(userId);
-        for (UUID friendId : friendIds) {
-            sendToUser(friendId, Map.of(
-                    "type", "PRESENCE_UPDATE",
-                    "data", Map.of("userId", userId, "presence", presence.name())
-            ));
+
+        // 2. Send to all DM conversation participants
+        List<UUID> dmParticipantIds = participantRepository.findOtherParticipantsInAllDMs(userId);
+
+        // Combine unique user IDs
+        Set<UUID> allRecipients = new HashSet<>();
+        allRecipients.addAll(friendIds);
+        allRecipients.addAll(dmParticipantIds);
+        allRecipients.add(userId); // Include self
+
+        Map<String, Object> payload = Map.of(
+                "type", "PRESENCE_UPDATE",
+                "data", Map.of("userId", userId, "presence", presence.name())
+        );
+
+        for (UUID recipientId : allRecipients) {
+            sendToUser(recipientId, payload);
         }
     }
 

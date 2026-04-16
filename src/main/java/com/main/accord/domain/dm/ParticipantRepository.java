@@ -44,4 +44,9 @@ public interface ParticipantRepository extends JpaRepository<Participant, Partic
             @Param("conversationIds") List<UUID> conversationIds,
             @Param("userId") UUID userId
     );
+
+    @Query("SELECT DISTINCT p.idUser FROM Participant p WHERE p.idConversation IN " +
+            "(SELECT p2.idConversation FROM Participant p2 WHERE p2.idUser = :userId AND p2.dtLeft IS NULL) " +
+            "AND p.idUser != :userId AND p.dtLeft IS NULL")
+    List<UUID> findOtherParticipantsInAllDMs(@Param("userId") UUID userId);
 }
