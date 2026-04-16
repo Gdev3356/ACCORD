@@ -56,6 +56,24 @@ public class ChatHandler {
         }
     }
 
+    /**
+     * Force a user offline - called when stale sessions are cleaned up
+     */
+    public void forceOffline(UUID userId) {
+        // Check if user still has any active sessions
+        if (!userSessionCount.containsKey(userId) || userSessionCount.get(userId) <= 0) {
+            // Update database
+            Account account = accountRepository.findById(userId).orElse(null);
+            if (account != null && account.getStPresence() != PresenceStatus.invisible) {
+                // Don't change invisible users - they want to appear offline
+                broadcastOfflineStatus(userId);
+            }
+
+            // Clear session tracking
+            userSessionCount.remove(userId);
+        }
+    }
+
     @EventListener
     public void handleSessionDisconnect(SessionDisconnectEvent event) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
@@ -65,10 +83,17 @@ public class ChatHandler {
             int count = userSessionCount.merge(userId, -1, Integer::sum);
             if (count <= 0) {
                 userSessionCount.remove(userId);
-                broadcastOfflineStatus(userId);
+
+                // Update database presence to offline
+                Account account = accountRepository.findById(userId).orElse(null);
+                if (account != null && account.getStPresence() != PresenceStatus.invisible) {
+                    // Only broadcast offline if not invisible
+                    broadcastOfflineStatus(userId);
+                }
             }
         }
     }
+
 
     private UUID getUserIdFromSession(StompHeaderAccessor accessor) {
         Principal user = accessor.getUser();
