@@ -58,14 +58,14 @@ public interface ParticipantRepository extends JpaRepository<Participant, Partic
     List<UUID> findOtherParticipantsInAllDMs(@Param("userId") UUID userId);
 
     @Query(value = """
-        SELECT DISTINCT p2.idUser
-        FROM DmParticipant p1
-        JOIN DmParticipant p2 ON p1.idConversation = p2.idConversation
-        WHERE p1.idUser = :userId
-          AND p1.dtLeft IS NULL
-          AND p2.idUser != :userId
-          AND p2.dtLeft IS NULL
+        SELECT DISTINCT p2.id_user
+        FROM "DM_PARTICIPANT" p1
+        INNER JOIN "DM_PARTICIPANT" p2 ON p1.id_conversation = p2.id_conversation
+        WHERE p1.id_user = :userId
+          AND p1.dt_left IS NULL
+          AND p2.id_user != :userId
+          AND p2.dt_left IS NULL
         LIMIT 500
-    """)
+    """, nativeQuery = true)
     Set<UUID> findRecentDMParticipants(@Param("userId") UUID userId);
 }

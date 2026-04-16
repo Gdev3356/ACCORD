@@ -3,6 +3,7 @@ package com.main.accord.domain.account;
 import com.main.accord.common.ApiResponse;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -13,6 +14,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
+@Slf4j
 public class AccountController {
 
     private final AccountService accountService;
@@ -76,26 +78,24 @@ public class AccountController {
     public ResponseEntity<ApiResponse<List<AccountService.PresenceDto>>> getMyPresences(
             @AuthenticationPrincipal AccordPrincipal principal) {
         try {
-            return ResponseEntity.ok(ApiResponse.ok(
-                    accountService.getRelevantPresences(principal.userId())
-            ));
+            log.info("Fetching presences for user: {}", principal.userId());
+            List<AccountService.PresenceDto> presences = accountService.getRelevantPresences(principal.userId());
+            log.info("Successfully fetched {} presences", presences.size());
+            return ResponseEntity.ok(ApiResponse.ok(presences));
         } catch (Exception e) {
-            // Log full stack trace to see the real error
-            e.printStackTrace();
-            System.err.println("Error type: " + e.getClass().getName());
-            System.err.println("Error message: " + e.getMessage());
+            // Use proper logging instead of System.err
+            log.error("Failed to fetch presences for user: {}", principal.userId(), e);
 
-            // Check if it's a SQL exception
-            if (e.getCause() != null) {
-                System.err.println("Cause type: " + e.getCause().getClass().getName());
-                System.err.println("Cause message: " + e.getCause().getMessage());
-
-                if (e.getCause().getCause() != null) {
-                    System.err.println("Root cause: " + e.getCause().getCause().getMessage());
-                }
+            // Also log the full chain of causes
+            Throwable cause = e;
+            int level = 0;
+            while (cause != null) {
+                log.error("  Cause level {}: {} - {}", level++,
+                        cause.getClass().getName(), cause.getMessage());
+                cause = cause.getCause();
             }
 
-            throw e; // Re-throw to see in response
+            throw e;
         }
     }
 

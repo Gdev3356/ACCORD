@@ -114,61 +114,65 @@ public class AccountService {
     }
 
     public List<PresenceDto> getRelevantPresences(UUID userId) {
+        log.info("=== Starting getRelevantPresences for user: {} ===", userId);
+
         try {
             Set<UUID> ids = new HashSet<>();
 
-            // Always get friends (this is fast)
+            // Always get friends (this is fast and reliable)
             List<UUID> friendIds = memberRepository.findFriendIds(userId);
             ids.addAll(friendIds);
+            log.info("Found {} friends", friendIds.size());
 
             // Try to get DM participants with caching
             try {
-                // Get from cache or compute if absent
                 Set<UUID> dmParticipants = dmParticipantCache.get(userId, id -> {
                     log.debug("Cache miss for user {}, fetching DM participants", userId);
                     try {
-                        // Use the simple version for reliability
-                        return participantRepository.findRecentDMParticipants(userId);
+                        Set<UUID> participants = participantRepository.findRecentDMParticipants(userId);
+                        log.info("Found {} DM participants for user {}",
+                                participants != null ? participants.size() : 0, userId);
+                        return participants != null ? participants : new HashSet<>();
                     } catch (Exception e) {
-                        log.error("Failed to fetch DM participants for user {}", userId, e);
+                        log.error("Failed to fetch DM participants for user {}: {}", userId, e.getMessage());
                         return new HashSet<>(); // Return empty set on error
                     }
                 });
 
-                if (dmParticipants != null) {
+                if (dmParticipants != null && !dmParticipants.isEmpty()) {
                     ids.addAll(dmParticipants);
                 }
 
             } catch (Exception e) {
-                log.warn("Could not fetch DM participants for user {}: {}",
-                        userId, e.getMessage());
+                log.warn("DM participant cache failed for user {}: {}", userId, e.getMessage());
                 // Continue with just friends - better than failing completely
             }
 
-            // Limit total results to prevent memory issues
-            if (ids.size() > 1000) {
-                log.warn("User {} has {} relevant users, limiting to 1000",
-                        userId, ids.size());
-                List<UUID> limitedIds = new ArrayList<>(ids);
-                if (limitedIds.size() > 1000) {
-                    limitedIds = limitedIds.subList(0, 1000);
-                }
-                ids = new HashSet<>(limitedIds);
-            }
+            // Add self
+            ids.add(userId);
+
+            log.info("Total unique IDs to fetch: {}", ids.size());
 
             // Fetch and return presence data
-            return accountRepository.findAllById(ids).stream()
+            List<PresenceDto> presences = accountRepository.findAllById(ids).stream()
                     .map(a -> new PresenceDto(a.getIdUser(), a.getStPresence()))
                     .toList();
+
+            log.info("Successfully fetched {} presences", presences.size());
+            return presences;
 
         } catch (Exception e) {
             log.error("Failed to fetch presences for user {}", userId, e);
             // Fallback: return at least the user's own presence
-            Account self = accountRepository.findById(userId).orElse(null);
-            if (self != null) {
-                return List.of(new PresenceDto(self.getIdUser(), self.getStPresence()));
+            try {
+                Account self = accountRepository.findById(userId).orElse(null);
+                if (self != null) {
+                    return List.of(new PresenceDto(self.getIdUser(), self.getStPresence()));
+                }
+            } catch (Exception ex) {
+                log.error("Even fallback failed", ex);
             }
-            throw new AccordException("Failed to fetch presence data");
+            return new ArrayList<>(); // Return empty list instead of throwing
         }
     }
 
