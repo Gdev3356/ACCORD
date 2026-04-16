@@ -57,11 +57,14 @@ public class ChatHandler {
                 // Restore last set presence
                 Account account = accountRepository.findById(userId)
                         .orElseThrow(() -> new RuntimeException("User not found: " + userId));
-                account.setStPresence(account.getStLastSetPresence());
-                accountRepository.save(account);
 
-                // Broadcast restored presence to friends
-                broadcastPresenceUpdate(userId, account.getStPresence());
+                PresenceStatus restored = account.getStLastSetPresence() != null
+                        ? account.getStLastSetPresence()
+                        : PresenceStatus.online;
+
+                account.setStPresence(restored);
+                accountRepository.save(account);
+                broadcastPresenceUpdate(userId, restored);
             }
         }
     }
