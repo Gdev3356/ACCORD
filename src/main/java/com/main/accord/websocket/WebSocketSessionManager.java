@@ -55,6 +55,7 @@ public class WebSocketSessionManager {
         String sessionId = event.getSessionId();
         SessionInfo removed = activeSessions.remove(sessionId);
         UUID userId = sessionToUser.remove(sessionId);  // ← always reliable here
+        log.info("DISCONNECT EVENT - sessionId: {}, resolved userId: {}", sessionId, userId);
 
         if (removed != null && userId != null) {
             log.info("WebSocket DISCONNECTED - Session: {}, User: {}, Active: {}, Duration: {}ms",

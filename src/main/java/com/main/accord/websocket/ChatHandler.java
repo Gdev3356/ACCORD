@@ -8,19 +8,19 @@ import com.main.accord.domain.message.Message;
 import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
-import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import java.security.Principal;
-import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ChatHandler {
@@ -93,6 +93,7 @@ public class ChatHandler {
         userSessionCount.remove(userId);
 
         Account account = accountRepository.findById(userId).orElse(null);
+        log.info("USER DISCONNECTED EVENT RECEIVED - userId: {}", event.userId());
         if (account != null && account.getStPresence() != PresenceStatus.invisible) {
             broadcastOfflineStatus(userId);
         }
@@ -155,6 +156,7 @@ public class ChatHandler {
         Account account = accountRepository.findById(userId).orElse(null);
         if (account != null) {
             account.setStPresence(PresenceStatus.offline);
+            log.info("BROADCASTING OFFLINE for userId: {}", userId);
             accountRepository.save(account);
         }
     }
