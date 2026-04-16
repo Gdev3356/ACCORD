@@ -200,21 +200,39 @@ public class WebhookService {
                             .dsContent(encryptionService.encrypt(content))
                             .tpMessage("webhook")
                             .jsActivity(Map.of(
-                                    "webhookName", webhook.getDsName(),
-                                    "webhookAvatar", webhook.getDsAvatarUrl(),
-                                    "webhookBio", webhook.getDsBio(),
-                                    "webhookBanner", webhook.getDsBannerUrl(),
-                                    "webhookColor", webhook.getNrColor()
+                                    "webhookName",   webhook.getDsName(),
+                                    "webhookAvatar", webhook.getDsAvatarUrl() != null ? webhook.getDsAvatarUrl() : "",
+                                    "webhookBio",    webhook.getDsBio()       != null ? webhook.getDsBio()       : "",
+                                    "webhookBanner", webhook.getDsBannerUrl() != null ? webhook.getDsBannerUrl() : "",
+                                    "webhookColor",  webhook.getNrColor()     != null ? webhook.getNrColor()     : 0
                             ))
                             .build()
             );
 
-            chatHandler.broadcastToChannel(webhook.getIdChannel(), saved);
-            log.debug("Webhook executed in channel {}: {}", webhook.getIdChannel(), content);
+            // Broadcast plain-text copy — same pattern as MessageService
+            Message broadcast = cloneAsWebhookBroadcast(saved, content);
+            chatHandler.broadcastToChannel(webhook.getIdChannel(), broadcast);
 
         } catch (Exception e) {
             log.error("Failed to execute webhook {}: {}", webhook.getIdWebhook(), e.getMessage());
         }
+    }
+
+    private Message cloneAsWebhookBroadcast(Message source, String plainContent) {
+        Message copy = new Message();
+        copy.setIdMessage(source.getIdMessage());
+        copy.setIdChannel(source.getIdChannel());
+        copy.setIdAuthor(null);
+        copy.setDsContent(plainContent);
+        copy.setStEdited(source.getStEdited());
+        copy.setStPinned(source.getStPinned());
+        copy.setStDeleted(source.getStDeleted());
+        copy.setDtCreated(source.getDtCreated());
+        copy.setDtEdited(source.getDtEdited());
+        copy.setTpMessage("webhook");
+        copy.setJsActivity(source.getJsActivity());
+        copy.setAttachments(source.getAttachments());
+        return copy;
     }
 
     private String interpolateMessage(String template, Map<String, String> variables) {

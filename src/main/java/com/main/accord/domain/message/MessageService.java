@@ -236,21 +236,25 @@ public class MessageService {
                 .orElseThrow(() -> new NotFoundException("Message not found."));
 
         Channel channel = channelRepository.findById(msg.getIdChannel()).orElseThrow();
-        boolean isAuthor = msg.getIdAuthor().equals(requesterId);
+
+        // Null-safe: webhook messages (idAuthor == null) are never "owned" by a user
+        boolean isAuthor  = msg.getIdAuthor() != null && msg.getIdAuthor().equals(requesterId);
         boolean canManage = permissionService.can(
                 requesterId, msg.getIdChannel(), channel.getIdServer(), Permissions.MANAGE_MESSAGES
         );
 
-        // NEW: Check role hierarchy if not the author and not a manager
         if (!isAuthor && !canManage) {
-            // Check if requester has higher role priority than message author
-            if (!hasHigherRolePriority(requesterId, msg.getIdAuthor(), channel.getIdServer())) {
-                throw new ForbiddenException("You cannot delete messages from users with equal or higher role.");
+            // Webhook messages (no author) can be deleted by anyone with higher role or canManage;
+            // since canManage is false here, require strict role hierarchy
+            if (msg.getIdAuthor() != null
+                    && !hasHigherRolePriority(requesterId, msg.getIdAuthor(), channel.getIdServer())) {
+                throw new ForbiddenException("You cannot delete messages from users with an equal or higher role.");
             }
-        }
-
-        if (!isAuthor && !canManage) {
-            throw new ForbiddenException("You can't delete this message.");
+            // Webhook messages (idAuthor == null) fall through and are deletable by canManage
+            // — but since canManage is false here, block non-managers from deleting webhook messages too
+            if (msg.getIdAuthor() == null) {
+                throw new ForbiddenException("You need Manage Messages permission to delete webhook messages.");
+            }
         }
 
         msg.setStDeleted(true);
