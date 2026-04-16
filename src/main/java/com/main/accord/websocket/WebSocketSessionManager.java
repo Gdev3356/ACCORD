@@ -54,11 +54,15 @@ public class WebSocketSessionManager {
     public void handleSessionDisconnect(SessionDisconnectEvent event) {
         String sessionId = event.getSessionId();
         SessionInfo removed = activeSessions.remove(sessionId);
-        UUID userId = sessionToUser.remove(sessionId);
+        UUID userId = sessionToUser.remove(sessionId);  // ← always reliable here
 
-        if (removed != null) {
+        if (removed != null && userId != null) {
             log.info("WebSocket DISCONNECTED - Session: {}, User: {}, Active: {}, Duration: {}ms",
                     sessionId, userId, activeSessions.size(), System.currentTimeMillis() - removed.connectedAt());
+
+            if (!hasOtherSessionsForUser(userId, sessionId)) {
+                eventPublisher.publishEvent(new UserDisconnectedEvent(userId));
+            }
         }
     }
 

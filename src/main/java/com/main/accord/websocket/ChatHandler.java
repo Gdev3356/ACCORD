@@ -88,22 +88,13 @@ public class ChatHandler {
     }
 
     @EventListener
-    public void handleSessionDisconnect(SessionDisconnectEvent event) {
-        StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
-        UUID userId = getUserIdFromSession(accessor);
+    public void handleUserDisconnected(UserDisconnectedEvent event) {
+        UUID userId = event.userId();
+        userSessionCount.remove(userId);
 
-        if (userId != null) {
-            int count = userSessionCount.merge(userId, -1, Integer::sum);
-            if (count <= 0) {
-                userSessionCount.remove(userId);
-
-                // Update database presence to offline
-                Account account = accountRepository.findById(userId).orElse(null);
-                if (account != null && account.getStPresence() != PresenceStatus.invisible) {
-                    // Only broadcast offline if not invisible
-                    broadcastOfflineStatus(userId);
-                }
-            }
+        Account account = accountRepository.findById(userId).orElse(null);
+        if (account != null && account.getStPresence() != PresenceStatus.invisible) {
+            broadcastOfflineStatus(userId);
         }
     }
 
