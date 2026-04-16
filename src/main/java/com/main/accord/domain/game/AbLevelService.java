@@ -171,7 +171,10 @@ public class AbLevelService {
                     .build());
         }
 
-        _checkScoreAchievements(userId, saved);
+        if (!level.getIdCreator().equals(userId)) {
+            _checkScoreAchievements(userId, saved);
+        }
+
         return saved;
     }
 
@@ -202,6 +205,9 @@ public class AbLevelService {
         AbLevel level = _requireExists(levelId);
         if (!level.getStPublished())
             throw new AccordException("You can only vote on published levels.");
+
+        if (level.getIdCreator().equals(userId))
+            throw new ForbiddenException("You cannot vote on your own level.");
 
         var existing = voteRepository.findByIdLevelAndIdUser(levelId, userId);
         boolean isNewUpvote = false;
@@ -267,8 +273,10 @@ public class AbLevelService {
         }
 
         // FIX: count non-deleted comments by this user; unlock only at 10
-        long commentCount = commentRepository.countByIdUserAndStDeletedFalse(userId);
+        long commentCount = commentRepository.countByIdUserAndStDeletedFalseAndNotOwnLevel(userId);
         if (commentCount >= 10) _tryUnlock(userId, "ab.critic");
+
+        return comment;
 
         return comment;
     }
@@ -340,6 +348,12 @@ public class AbLevelService {
      *      complex achievement that cannot be checked here.
      */
     private void _checkScoreAchievements(UUID userId, AbScore score) {
+        AbLevel level = levelRepository.findById(score.getIdLevel()).orElse(null);
+
+        if (level != null && level.getIdCreator().equals(userId)) {
+            return;
+        }
+
         _tryUnlock(userId, "ab.level_complete");
         if (score.getNrStars() == 3) _tryUnlock(userId, "ab.perfect_score");
         // Hotshot: are they sitting at rank 1?

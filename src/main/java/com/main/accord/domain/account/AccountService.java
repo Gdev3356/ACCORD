@@ -9,7 +9,6 @@ import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.websocket.ChatHandler;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +18,6 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class AccountService {
 
     private final AccountRepository accountRepository;
@@ -36,7 +34,6 @@ public class AccountService {
                 .expireAfterWrite(30, TimeUnit.SECONDS)
                 .maximumSize(1000)
                 .build();
-        log.info("Initialized DM participant cache");
     }
 
     public Account getByHandle(String handle) {
@@ -114,65 +111,36 @@ public class AccountService {
     }
 
     public List<PresenceDto> getRelevantPresences(UUID userId) {
-        log.info("=== Starting getRelevantPresences for user: {} ===", userId);
-
         try {
             Set<UUID> ids = new HashSet<>();
 
-            // Always get friends (this is fast and reliable)
             List<UUID> friendIds = memberRepository.findFriendIds(userId);
             ids.addAll(friendIds);
-            log.info("Found {} friends", friendIds.size());
 
-            // Try to get DM participants with caching
             try {
                 Set<UUID> dmParticipants = dmParticipantCache.get(userId, id -> {
-                    log.debug("Cache miss for user {}, fetching DM participants", userId);
                     try {
-                        Set<UUID> participants = participantRepository.findRecentDMParticipants(userId);
-                        log.info("Found {} DM participants for user {}",
-                                participants != null ? participants.size() : 0, userId);
-                        return participants != null ? participants : new HashSet<>();
+                        return participantRepository.findRecentDMParticipants(userId);
                     } catch (Exception e) {
-                        log.error("Failed to fetch DM participants for user {}: {}", userId, e.getMessage());
-                        return new HashSet<>(); // Return empty set on error
+                        return new HashSet<>();
                     }
                 });
 
-                if (dmParticipants != null && !dmParticipants.isEmpty()) {
+                if (dmParticipants != null) {
                     ids.addAll(dmParticipants);
                 }
-
             } catch (Exception e) {
-                log.warn("DM participant cache failed for user {}: {}", userId, e.getMessage());
-                // Continue with just friends - better than failing completely
+                // Continue with just friends
             }
 
-            // Add self
             ids.add(userId);
 
-            log.info("Total unique IDs to fetch: {}", ids.size());
-
-            // Fetch and return presence data
-            List<PresenceDto> presences = accountRepository.findAllById(ids).stream()
+            return accountRepository.findAllById(ids).stream()
                     .map(a -> new PresenceDto(a.getIdUser(), a.getStPresence()))
                     .toList();
 
-            log.info("Successfully fetched {} presences", presences.size());
-            return presences;
-
         } catch (Exception e) {
-            log.error("Failed to fetch presences for user {}", userId, e);
-            // Fallback: return at least the user's own presence
-            try {
-                Account self = accountRepository.findById(userId).orElse(null);
-                if (self != null) {
-                    return List.of(new PresenceDto(self.getIdUser(), self.getStPresence()));
-                }
-            } catch (Exception ex) {
-                log.error("Even fallback failed", ex);
-            }
-            return new ArrayList<>(); // Return empty list instead of throwing
+            throw new AccordException("Failed to fetch presence data");
         }
     }
 

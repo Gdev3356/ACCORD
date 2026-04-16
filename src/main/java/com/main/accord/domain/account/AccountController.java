@@ -1,5 +1,6 @@
 package com.main.accord.domain.account;
 
+import com.main.accord.common.AccordException;
 import com.main.accord.common.ApiResponse;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +15,6 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
-@Slf4j
 public class AccountController {
 
     private final AccountService accountService;
@@ -78,24 +78,10 @@ public class AccountController {
     public ResponseEntity<ApiResponse<List<AccountService.PresenceDto>>> getMyPresences(
             @AuthenticationPrincipal AccordPrincipal principal) {
         try {
-            log.info("Fetching presences for user: {}", principal.userId());
             List<AccountService.PresenceDto> presences = accountService.getRelevantPresences(principal.userId());
-            log.info("Successfully fetched {} presences", presences.size());
             return ResponseEntity.ok(ApiResponse.ok(presences));
         } catch (Exception e) {
-            // Use proper logging instead of System.err
-            log.error("Failed to fetch presences for user: {}", principal.userId(), e);
-
-            // Also log the full chain of causes
-            Throwable cause = e;
-            int level = 0;
-            while (cause != null) {
-                log.error("  Cause level {}: {} - {}", level++,
-                        cause.getClass().getName(), cause.getMessage());
-                cause = cause.getCause();
-            }
-
-            throw e;
+            throw new AccordException("What did you expect?");
         }
     }
 

@@ -12,5 +12,14 @@ public interface AbLevelCommentRepository extends JpaRepository<AbLevelComment, 
     List<AbLevelComment> findByLevel(@Param("levelId") UUID levelId);
 
     // FIX: needed for the ab.critic achievement (10 comments threshold)
-    long countByIdUserAndStDeletedFalse(UUID idUser);
+    @Query("""
+        SELECT COUNT(c) FROM AbLevelComment c
+        WHERE c.idUser = :userId
+          AND c.stDeleted = false
+          AND c.idLevel IN (
+              SELECT l.idLevel FROM AbLevel l
+              WHERE l.idCreator != :userId
+          )
+    """)
+    long countByIdUserAndStDeletedFalseAndNotOwnLevel(@Param("userId") UUID userId);
 }
