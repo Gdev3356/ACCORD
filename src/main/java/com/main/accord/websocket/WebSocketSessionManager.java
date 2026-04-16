@@ -105,8 +105,6 @@ public class WebSocketSessionManager {
         }
     }
 
-    public record UserMarkedIdleEvent(UUID userId) {}
-
     private void checkIdleUsers(long now) {
         long idleThreshold = now - (5 * 60 * 1000); // 5 minutes
 
