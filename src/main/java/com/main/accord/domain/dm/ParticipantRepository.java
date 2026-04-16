@@ -59,8 +59,8 @@ public interface ParticipantRepository extends JpaRepository<Participant, Partic
 
     @Query(value = """
         SELECT DISTINCT p2.id_user
-        FROM DmParticipant p1
-        INNER JOIN DmParticipant p2 ON p1.id_conversation = p2.id_conversation
+        FROM dm_participant p1
+        INNER JOIN dm_participant p2 ON p1.id_conversation = p2.id_conversation
         WHERE p1.id_user = :userId
           AND p1.dt_left IS NULL
           AND p2.id_user != :userId
