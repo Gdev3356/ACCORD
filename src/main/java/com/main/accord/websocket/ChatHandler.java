@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
+import java.security.Principal;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,9 +71,12 @@ public class ChatHandler {
     }
 
     private UUID getUserIdFromSession(StompHeaderAccessor accessor) {
-        // Get user ID from session attributes
-        Authentication auth = (Authentication) accessor.getUser();
-        if (auth != null && auth.getPrincipal() instanceof AccordPrincipal principal) {
+        Principal user = accessor.getUser();
+        if (user instanceof AccordPrincipal principal) {
+            return principal.userId();
+        }
+        if (user instanceof Authentication auth &&
+                auth.getPrincipal() instanceof AccordPrincipal principal) {
             return principal.userId();
         }
         return null;

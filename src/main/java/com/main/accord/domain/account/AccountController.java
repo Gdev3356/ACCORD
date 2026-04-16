@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -68,6 +69,14 @@ public class AccountController {
             @AuthenticationPrincipal AccordPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
                 accountService.updatePresence(principal.userId(), req.presence())
+        ));
+    }
+
+    @GetMapping("/@me/presences")
+    public ResponseEntity<ApiResponse<List<AccountService.PresenceDto>>> getMyPresences(
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                accountService.getRelevantPresences(principal.userId())
         ));
     }
 

@@ -2,12 +2,17 @@ package com.main.accord.domain.account;
 
 import com.main.accord.common.AccordException;
 import com.main.accord.common.NotFoundException;
+import com.main.accord.domain.dm.ParticipantRepository;
+import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -16,6 +21,8 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final ChatHandler chatHandler;
+    private final MemberRepository memberRepository;
+    private final ParticipantRepository participantRepository;
 
     public Account getByHandle(String handle) {
         return accountRepository.findByDsHandleIgnoreCase(handle)
@@ -92,6 +99,18 @@ public class AccountService {
         account.setStPresence(account.getStLastSetPresence());
         accountRepository.save(account);
     }
+
+    public List<PresenceDto> getRelevantPresences(UUID userId) {
+        Set<UUID> ids = new HashSet<>();
+        ids.addAll(memberRepository.findFriendIds(userId));
+        ids.addAll(participantRepository.findOtherParticipantsInAllDMs(userId, OffsetDateTime.now().minusDays(30)));
+
+        return accountRepository.findAllById(ids).stream()
+                .map(a -> new PresenceDto(a.getIdUser(), a.getStPresence()))
+                .toList();
+    }
+
+    public record PresenceDto(UUID userId, PresenceStatus presence) {}
 
     public record UpdateProfileRequest(
             String         handle,
