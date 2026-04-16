@@ -92,7 +92,9 @@ public class AccountService {
         Account account = accountRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found."));
         account.setStPresence(presence);
-        account.setStLastSetPresence(presence);
+        if (presence != PresenceStatus.idle) {
+            account.setStLastSetPresence(presence);
+        }
         chatHandler.broadcastPresenceUpdate(userId, presence);
         return accountRepository.save(account);
     }
