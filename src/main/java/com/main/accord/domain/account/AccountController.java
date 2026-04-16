@@ -75,11 +75,16 @@ public class AccountController {
     @GetMapping("/@me/presences")
     public ResponseEntity<ApiResponse<List<AccountService.PresenceDto>>> getMyPresences(
             @AuthenticationPrincipal AccordPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.ok(
-                accountService.getRelevantPresences(principal.userId())
-        ));
+        try {
+            return ResponseEntity.ok(ApiResponse.ok(
+                    accountService.getRelevantPresences(principal.userId())
+            ));
+        } catch (Exception e) {
+            // Temporary - remove after debugging
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.err(e.getClass().getSimpleName() + ": " + e.getMessage()));
+        }
     }
-
     public record PresenceRequest(PresenceStatus presence) {}
 
     @GetMapping("/by-id/{userId}")
