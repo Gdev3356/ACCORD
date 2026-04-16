@@ -72,13 +72,21 @@ public class ChatHandler {
 
     private UUID getUserIdFromSession(StompHeaderAccessor accessor) {
         Principal user = accessor.getUser();
-        if (user instanceof AccordPrincipal principal) {
-            return principal.userId();
+        if (user == null) return null;
+
+        // Try Authentication wrapper first (most common)
+        if (user instanceof Authentication auth) {
+            Object principal = auth.getPrincipal();
+            if (principal instanceof AccordPrincipal accordPrincipal) {
+                return accordPrincipal.userId();
+            }
         }
-        if (user instanceof Authentication auth &&
-                auth.getPrincipal() instanceof AccordPrincipal principal) {
-            return principal.userId();
+
+        // Fallback: direct AccordPrincipal (unlikely but possible)
+        if (user instanceof AccordPrincipal accordPrincipal) {
+            return accordPrincipal.userId();
         }
+
         return null;
     }
 
