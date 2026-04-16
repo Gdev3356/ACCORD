@@ -277,8 +277,6 @@ public class AbLevelService {
         if (commentCount >= 10) _tryUnlock(userId, "ab.critic");
 
         return comment;
-
-        return comment;
     }
 
     @Transactional
