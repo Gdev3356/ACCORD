@@ -77,6 +77,16 @@ public class MessageController {
         ));
     }
 
+    @GetMapping("/{messageId}")
+    public ResponseEntity<ApiResponse<Message>> getMessage(
+            @PathVariable UUID channelId,
+            @PathVariable UUID messageId,
+            @AuthenticationPrincipal AccordPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                messageService.getMessage(channelId, messageId, principal.userId())
+        ));
+    }
+
     @DeleteMapping("/{messageId}")
     public ResponseEntity<ApiResponse<Void>> deleteMessage(
             @PathVariable UUID channelId,

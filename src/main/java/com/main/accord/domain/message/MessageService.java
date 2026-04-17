@@ -291,4 +291,22 @@ public class MessageService {
         copy.setAttachments(source.getAttachments());
         return copy;
     }
+
+    @Transactional(readOnly = true)
+    public Message getMessage(UUID channelId, UUID messageId, UUID requesterId) {
+        Channel channel = channelRepository.findById(channelId)
+                .orElseThrow(() -> new NotFoundException("Channel not found."));
+        if (!permissionService.can(requesterId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
+            throw new ForbiddenException("You don't have access to this channel.");
+
+        Message msg = messageRepository.findById(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found."));
+
+        if (msg.getDsContent() == null) return msg;
+        try {
+            return cloneWithDecryptedContent(msg, encryptionService.decrypt(msg.getDsContent()));
+        } catch (Exception e) {
+            return msg; // legacy plaintext
+        }
+    }
 }
