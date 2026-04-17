@@ -1,6 +1,9 @@
 package com.main.accord.websocket;
 
+import com.main.accord.domain.account.Account;
+import com.main.accord.domain.account.AccountRepository;
 import com.main.accord.domain.account.PresenceStatus;
+import com.main.accord.domain.dm.ParticipantRepository;
 import com.main.accord.domain.message.Message;
 import com.main.accord.domain.server.MemberRepository;
 import com.main.accord.security.AccordPrincipal;
@@ -21,19 +24,21 @@ import java.util.*;
 @RequiredArgsConstructor
 public class ChatHandler {
 
-    private final SimpMessagingTemplate broker;
-    private final MemberRepository memberRepository;
-    private final PresenceBroadcastService presenceService;
+    // ── Dependencies ──────────────────────────────────────────────────────────
 
-    @EventListener
-    public void handleUserForcedOffline(UserForcedOfflineEvent event) {
-        presenceService.userDisconnected(event.userId());
-    }
+    private final SimpMessagingTemplate    broker;
+    private final MemberRepository         memberRepository;
+    private final AccountRepository        accountRepository;
+    private final ParticipantRepository    participantRepository;
+    private final PresenceStore            presenceStore;
+    private final WebSocketSessionManager  sessionManager;
 
-    @EventListener
-    public void handleUserMarkedIdle(UserMarkedIdleEvent event) {
-        presenceService.setPresenceAuto(event.userId(), PresenceStatus.idle);
-    }
+    // ── Session-connect event ─────────────────────────────────────────────────
+    //
+    // Fired by Spring after the STOMP CONNECTED frame is sent.
+    // At this point the session is already registered in WebSocketSessionManager,
+    // so we only need to restore the DB-persisted presence if it differs from
+    // what's currently live (handles server restarts, stale-session recovery, etc.)
 
     @EventListener
     public void handleSessionConnected(SessionConnectedEvent event) {
@@ -41,55 +46,100 @@ public class ChatHandler {
         UUID userId = getUserIdFromSession(accessor);
         if (userId == null) return;
 
-        log.debug("Session connected for user: {}", userId);
-        presenceService.userConnected(userId);
+        Account account = accountRepository.findById(userId).orElse(null);
+        if (account == null) return;
+
+        PresenceStatus target = account.getStLastSetPresence() != null
+                ? account.getStLastSetPresence()
+                : PresenceStatus.online;
+
+        // Don't disturb invisible users — they want to appear offline
+        if (target == PresenceStatus.invisible) return;
+
+        PresenceStatus current = presenceStore.get(userId);
+        if (current != target) {
+            presenceStore.set(userId, target);
+            broadcastPresenceUpdate(userId, target);
+        }
     }
+
+    // ── Presence event listeners ──────────────────────────────────────────────
 
     @EventListener
     public void handleUserDisconnected(UserDisconnectedEvent event) {
-        log.info("User disconnected event: {}", event.userId());
-        presenceService.userDisconnected(event.userId());
+        UUID userId = event.userId();
+        log.info("UserDisconnectedEvent received userId={}", userId);
+        broadcastOfflineStatus(userId);
     }
 
-    private UUID getUserIdFromSession(StompHeaderAccessor accessor) {
-        Principal user = accessor.getUser();
-        if (user == null) return null;
-
-        if (user instanceof Authentication auth) {
-            Object principal = auth.getPrincipal();
-            if (principal instanceof AccordPrincipal accordPrincipal) {
-                return accordPrincipal.userId();
-            }
-        }
-
-        if (user instanceof AccordPrincipal accordPrincipal) {
-            return accordPrincipal.userId();
-        }
-
-        return null;
+    @EventListener
+    public void handleUserForcedOffline(UserForcedOfflineEvent event) {
+        broadcastOfflineStatus(event.userId());
     }
 
-    // Keep existing broadcast methods (they delegate to PresenceService now)
+    @EventListener
+    public void handleUserMarkedIdle(UserMarkedIdleEvent event) {
+        broadcastPresenceUpdate(event.userId(), PresenceStatus.idle);
+    }
+
+    // ── Presence broadcast ────────────────────────────────────────────────────
+
     public void broadcastPresenceUpdate(UUID userId, PresenceStatus presence) {
-        // This is now handled by PresenceService, but keep for backward compatibility
-        presenceService.getRelevantPresences(userId); // Just to trigger cache
+
+        // Build the full logical recipient list
+        List<UUID> friendIds       = memberRepository.findFriendIds(userId);
+        List<UUID> dmParticipantIds = participantRepository.findOtherParticipantsInAllDMs(userId);
+
+        Set<UUID> allRecipients = new HashSet<>();
+        allRecipients.addAll(friendIds);
+        allRecipients.addAll(dmParticipantIds);
+        allRecipients.add(userId); // always notify self
+
+        // ── Optimisation: skip users who aren't connected ─────────────────────
+        // Sending to an offline user is a no-op on the broker, but it still
+        // hits the session lookup and serialises the payload. With a busy server
+        // this fan-out can be 80 %+ waste. Filtering to connected users only
+        // makes the loop cheap regardless of total friend/DM count.
+        Set<UUID> connected = sessionManager.getConnectedUserIds();
+        allRecipients.retainAll(connected);
+
+        Map<String, Object> payload = Map.of(
+                "type", "PRESENCE_UPDATE",
+                "data", Map.of("userId", userId, "presence", presence.name())
+        );
+
+        for (UUID recipientId : allRecipients) {
+            sendToUser(recipientId, payload);
+        }
     }
 
-    public void sendToUser(UUID userId, Object payload) {
-        broker.convertAndSendToUser(userId.toString(), "/queue/events", payload);
+    private void broadcastOfflineStatus(UUID userId) {
+        // Update presence store (lazy DB flush handles the rest)
+        presenceStore.set(userId, PresenceStatus.offline);
+        broadcastPresenceUpdate(userId, PresenceStatus.offline);
     }
 
-    // Keep all your existing channel/DM broadcast methods unchanged
+    // ── Channel / DM broadcast ────────────────────────────────────────────────
+
     public void broadcastToChannel(UUID channelId, Object payload) {
-        broker.convertAndSend("/topic/channel." + channelId, new ChatEvent("MESSAGE_CREATE", payload));
+        broker.convertAndSend(
+                "/topic/channel." + channelId,
+                new ChatEvent("MESSAGE_CREATE", payload)
+        );
     }
 
     public void broadcastEditToChannel(UUID channelId, Message message) {
-        broker.convertAndSend("/topic/channel." + channelId, new ChatEvent("MESSAGE_UPDATE", message));
+        broker.convertAndSend(
+                "/topic/channel." + channelId,
+                new ChatEvent("MESSAGE_UPDATE", message)
+        );
     }
 
     public void broadcastDeleteToChannel(UUID channelId, UUID messageId) {
-        broker.convertAndSend("/topic/channel." + channelId, new ChatEvent("MESSAGE_DELETE", Map.of("idMessage", messageId)));
+        broker.convertAndSend(
+                "/topic/channel." + channelId,
+                new ChatEvent("MESSAGE_DELETE", Map.of("idMessage", messageId))
+        );
     }
 
     public void broadcastToDm(UUID conversationId, Object payload) {
@@ -106,6 +156,26 @@ public class ChatHandler {
             sendToUser(userId, event);
         }
     }
+
+    public void sendToUser(UUID userId, Object payload) {
+        broker.convertAndSendToUser(userId.toString(), "/queue/events", payload);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private UUID getUserIdFromSession(StompHeaderAccessor accessor) {
+        Principal user = accessor.getUser();
+        if (user == null) return null;
+
+        if (user instanceof Authentication auth) {
+            if (auth.getPrincipal() instanceof AccordPrincipal ap) return ap.userId();
+        }
+        if (user instanceof AccordPrincipal ap) return ap.userId();
+
+        return null;
+    }
+
+    // ── Types ─────────────────────────────────────────────────────────────────
 
     public record ChatEvent(String type, Object data) {}
 }
