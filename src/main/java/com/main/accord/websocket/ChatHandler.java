@@ -55,13 +55,15 @@ public class ChatHandler {
         if (account == null) return;
 
         // Always restore if currently offline (handles the race)
-        if (account.getStPresence() == PresenceStatus.offline) {
-            PresenceStatus restored = account.getStLastSetPresence() != null
-                    ? account.getStLastSetPresence()
-                    : PresenceStatus.online;
-            account.setStPresence(restored);
+        PresenceStatus target = account.getStLastSetPresence() != null
+                ? account.getStLastSetPresence()
+                : PresenceStatus.online;
+
+// Don't force a change if the user is invisible – they want to stay invisible
+        if (target != PresenceStatus.invisible && account.getStPresence() != target) {
+            account.setStPresence(target);
             accountRepository.save(account);
-            broadcastPresenceUpdate(userId, restored);
+            broadcastPresenceUpdate(userId, target);
         }
     }
 
