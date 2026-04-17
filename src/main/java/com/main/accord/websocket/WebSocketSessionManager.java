@@ -1,7 +1,7 @@
 package com.main.accord.websocket;
 
-import com.main.accord.domain.account.Account;
 import com.main.accord.domain.account.AccountRepository;
+import com.main.accord.domain.account.PresenceService;
 import com.main.accord.domain.account.PresenceStatus;
 import com.main.accord.security.AccordPrincipal;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +32,7 @@ public class WebSocketSessionManager {
     private final ApplicationEventPublisher eventPublisher;
     private final AccountRepository accountRepository;
     private final ConcurrentHashMap<String, UUID> sessionToUser = new ConcurrentHashMap<>();
+    private final PresenceService presenceService;
 
     record SessionInfo(String sessionId, UUID userId, long connectedAt, long lastHeartbeat) {}
 
@@ -47,6 +48,9 @@ public class WebSocketSessionManager {
             int total = totalConnections.incrementAndGet();
             log.info("WebSocket CONNECTED - Session: {}, User: {}, Active: {}, Total: {}",
                     sessionId, userId, activeSessions.size(), total);
+
+            // Let PresenceService know about connection (for presence restoration)
+            presenceService.userConnected(userId);
         }
     }
 
@@ -111,7 +115,7 @@ public class WebSocketSessionManager {
     }
 
     private void checkIdleUsers(long now) {
-        long idleThreshold = now - (5 * 60 * 1000); // 5 minutes
+        long idleThreshold = now - (5 * 60 * 1000);
 
         activeSessions.values().stream()
                 .map(SessionInfo::userId)
@@ -121,13 +125,9 @@ public class WebSocketSessionManager {
                             .anyMatch(s -> s.userId().equals(userId) && s.lastHeartbeat() > idleThreshold);
 
                     if (!hasRecentActivity) {
-                        Account account = accountRepository.findById(userId).orElse(null);
-                        if (account != null && account.getStPresence() == PresenceStatus.online) {
-                            account.setStPresence(PresenceStatus.idle);
-                            accountRepository.save(account);
-                            eventPublisher.publishEvent(new UserMarkedIdleEvent(userId));
-                            log.info("User {} marked as idle due to inactivity", userId);
-                        }
+                        // Use PresenceService instead of direct DB
+                        presenceService.setPresenceAuto(userId, PresenceStatus.idle);
+                        log.info("User {} marked as idle due to inactivity", userId);
                     }
                 });
     }

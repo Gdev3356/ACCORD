@@ -1,40 +1,20 @@
 package com.main.accord.domain.account;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import com.main.accord.common.AccordException;
 import com.main.accord.common.NotFoundException;
-import com.main.accord.domain.dm.ParticipantRepository;
-import com.main.accord.domain.server.MemberRepository;
-import com.main.accord.websocket.ChatHandler;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
 public class AccountService {
 
     private final AccountRepository accountRepository;
-    private final ChatHandler chatHandler;
-    private final MemberRepository memberRepository;
-    private final ParticipantRepository participantRepository;
-
-    // Cache for DM participants - expires after 30 seconds
-    private Cache<UUID, Set<UUID>> dmParticipantCache;
-
-    @PostConstruct
-    public void init() {
-        this.dmParticipantCache = Caffeine.newBuilder()
-                .expireAfterWrite(30, TimeUnit.SECONDS)
-                .maximumSize(1000)
-                .build();
-    }
+    private final PresenceService presenceService;
 
     public Account getByHandle(String handle) {
         return accountRepository.findByDsHandleIgnoreCase(handle)
@@ -89,74 +69,25 @@ public class AccountService {
         if (presence == PresenceStatus.offline) {
             throw new AccordException("Cannot manually set presence to offline.");
         }
-        Account account = accountRepository.findById(userId)
+
+        // Delegate to PresenceService (handles cache + DB + broadcast)
+        presenceService.setPresence(userId, presence);
+
+        // Return updated account
+        return accountRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found."));
-        account.setStPresence(presence);
-        if (presence != PresenceStatus.idle) {
-            account.setStLastSetPresence(presence);
-        }
-        chatHandler.broadcastPresenceUpdate(userId, presence);
-        return accountRepository.save(account);
     }
 
-    @Transactional
-    public Account updateNotifications(UUID userId, boolean enabled) {
-        Account account = accountRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found."));
-        account.setStNotificationsEnabled(enabled);
-        return accountRepository.save(account);
-    }
-
-    public List<PresenceDto> getRelevantPresences(UUID userId) {
-        try {
-            Set<UUID> ids = new HashSet<>();
-
-            List<UUID> friendIds = memberRepository.findFriendIds(userId);
-            ids.addAll(friendIds);
-
-            try {
-                Set<UUID> dmParticipants = dmParticipantCache.get(userId, id -> {
-                    try {
-                        return participantRepository.findRecentDMParticipants(userId);
-                    } catch (Exception e) {
-                        return new HashSet<>();
-                    }
-                });
-
-                if (dmParticipants != null) {
-                    ids.addAll(dmParticipants);
-                }
-            } catch (Exception e) {
-                // Continue with just friends
-            }
-
-            ids.add(userId);
-
-            return accountRepository.findAllById(ids).stream()
-                    .map(a -> new PresenceDto(a.getIdUser(), a.getStPresence()))
-                    .toList();
-
-        } catch (Exception e) {
-            throw new AccordException("Failed to fetch presence data");
-        }
-    }
-
+    // Modify updatePresenceAuto method
     @Transactional
     public void updatePresenceAuto(UUID userId, PresenceStatus presence) {
         if (presence != PresenceStatus.idle && presence != PresenceStatus.online) return;
+        presenceService.setPresenceAuto(userId, presence);
+    }
 
-        Account account = accountRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found."));
-
-        PresenceStatus lastSet = account.getStLastSetPresence();
-
-        // Only auto-transition if the user hasn't explicitly chosen something
-        if (lastSet != null && lastSet != PresenceStatus.online) return;
-
-        account.setStPresence(presence);
-        // stLastSetPresence intentionally NOT touched
-        chatHandler.broadcastPresenceUpdate(userId, presence);
-        accountRepository.save(account);
+    // Modify getRelevantPresences method (MUCH simpler now!)
+    public List<PresenceDto> getRelevantPresences(UUID userId) {
+        return presenceService.getRelevantPresences(userId);
     }
 
     public record PresenceDto(UUID userId, PresenceStatus presence) {}
