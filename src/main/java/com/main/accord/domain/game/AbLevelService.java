@@ -4,9 +4,8 @@ import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
 import com.main.accord.domain.account.AuthRepository;
-import com.main.accord.domain.notification.Notification;
 import com.main.accord.domain.notification.NotifType;
-import com.main.accord.domain.notification.NotificationRepository;
+import com.main.accord.domain.notification.NotificationService;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -31,7 +30,7 @@ public class AbLevelService {
     private final AbLevelReportRepository       reportRepository;
     private final GmAchievementRepository       achievementRepository;
     private final GmPlayerAchievementRepository playerAchievementRepository;
-    private final NotificationRepository        notificationRepository;
+    private final NotificationService notificationService;
     private final AuthRepository                authRepository;
     private final ChatHandler                   chatHandler;
 
@@ -54,8 +53,8 @@ public class AbLevelService {
      */
     @Transactional
     public AbLevel saveDraft(UUID creatorId, SaveLevelRequest req) {
-        if (req.parScore() < 1)
-            throw new AccordException("Par score must be at least 1.");
+        if (req.parScore() < 1000)
+            throw new AccordException("Par score must be at least 1000.");
 
         return levelRepository.save(AbLevel.builder()
                 .idCreator(creatorId)
@@ -146,6 +145,9 @@ public class AbLevelService {
      * Submit a score. Keeps personal best (highest NR_SCORE per user per level).
      * Triggers relevant achievement checks after saving.
      */
+
+    private static final int MAX_SCORE_MULTIPLIER = 10;
+
     @Transactional
     public AbScore submitScore(UUID userId, UUID levelId, int score, short stars) {
         AbLevel level = _requireExists(levelId);
@@ -154,6 +156,8 @@ public class AbLevelService {
         if (stars < 1 || stars > 3)
             throw new AccordException("Stars must be between 1 and 3.");
 
+        if (score > level.getNrParScore() * MAX_SCORE_MULTIPLIER)
+            throw new AccordException("Score exceeds the maximum allowed for this level.");
         var existing = scoreRepository.findByIdLevelAndIdUser(levelId, userId);
 
         AbScore saved;
@@ -370,13 +374,11 @@ public class AbLevelService {
                 playerAchievementRepository.save(GmPlayerAchievement.builder()
                         .idUser(userId).idAchievement(ach.getIdAchievement()).build());
 
-                // Persist the notification as before
-                _notify(userId, NotifType.achievement_unlocked,
+                notificationService.send(userId, NotifType.achievement_unlocked,
                         "Achievement Unlocked: " + ach.getDsTitle(),
                         ach.getDsDesc(),
                         Map.of("achievementKey", key));
 
-                // Dedicated event so the frontend toast has everything it needs
                 chatHandler.sendToUser(userId, Map.of(
                         "type", "ACHIEVEMENT_UNLOCKED",
                         "data", Map.of(
@@ -393,15 +395,7 @@ public class AbLevelService {
     // ── Notification helper ───────────────────────────────────────────────────
 
     private void _notify(UUID target, NotifType type, String title, String body, Map<String, Object> payload) {
-        notificationRepository.save(Notification.builder()
-                .idUser(target).tpNotif(type)
-                .dsTitle(title).dsBody(body)
-                .jsPayload(payload).build());
-
-        chatHandler.sendToUser(target, Map.of(
-                "type", "NOTIFICATION",
-                "data", Map.of("tpNotif", type.name(), "dsTitle", title, "jsPayload", payload)
-        ));
+        notificationService.send(target, type, title, body, payload);
     }
 
     // ── Guard helpers ─────────────────────────────────────────────────────────

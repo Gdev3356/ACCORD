@@ -1,9 +1,8 @@
 package com.main.accord.domain.report;
 
 import com.main.accord.domain.account.AuthRepository;
-import com.main.accord.domain.notification.Notification;
 import com.main.accord.domain.notification.NotifType;
-import com.main.accord.domain.notification.NotificationRepository;
+import com.main.accord.domain.notification.NotificationService;
 import com.main.accord.websocket.ChatHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,7 +18,7 @@ import java.util.UUID;
 public class ReportService {
 
     private final ReportRepository       reportRepository;
-    private final NotificationRepository notificationRepository;
+    private final NotificationService    notificationService;
     private final AuthRepository         authRepository;  // to find admins
     private final ChatHandler            chatHandler;
 
@@ -35,18 +34,14 @@ public class ReportService {
 
         // Notify all admins via the existing notification system
         authRepository.findAllAdmins().forEach(adminId -> {
-            notificationRepository.save(
-                    Notification.builder()
-                            .idUser(adminId)
-                            .tpNotif(NotifType.system)
-                            .dsTitle("New User Report")
-                            .dsBody("A user has been reported. Reason: " + (reason != null ? reason : "No reason given"))
-                            .jsPayload(Map.of(
-                                    "reportId",   report.getIdReport().toString(),
-                                    "reporterId", reporterId.toString(),
-                                    "reportedId", reportedId.toString()
-                            ))
-                            .build()
+                notificationService.send(adminId, NotifType.system,
+                        "New User Report",
+                        "A user has been reported. Reason: " + (reason != null ? reason : "No reason given"),
+                        Map.of(
+                                "reportId",   report.getIdReport().toString(),
+                                "reporterId", reporterId.toString(),
+                                "reportedId", reportedId.toString()
+                        )
             );
 
             chatHandler.sendToUser(adminId, Map.of(

@@ -35,8 +35,11 @@ public class Notification {
     private String dsBody;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "JS_PAYLOAD", columnDefinition = "jsonb")
-    private Map<String, Object> jsPayload;
+    @Column(name = "js_payload") // now a plain text/varchar column
+    private String jsPayload;    // stores encrypted JSON string
+
+    @Transient
+    private Map<String, Object> jsPayloadDecrypted; // used only in-memory / for WebSocket push
 
     @Builder.Default @Column(name = "ST_READ") private Boolean stRead = false;
 

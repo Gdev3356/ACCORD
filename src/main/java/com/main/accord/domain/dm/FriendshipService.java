@@ -4,9 +4,7 @@ import com.main.accord.common.AccordException;
 import com.main.accord.common.ForbiddenException;
 import com.main.accord.common.NotFoundException;
 import com.main.accord.domain.notification.NotifType;
-import com.main.accord.domain.notification.Notification;
-import com.main.accord.domain.notification.NotificationRepository;
-import com.main.accord.websocket.ChatHandler;
+import com.main.accord.domain.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,8 +18,7 @@ import java.util.UUID;
 public class FriendshipService {
 
     private final FriendshipRepository   friendshipRepository;
-    private final ChatHandler            chatHandler;
-    private final NotificationRepository notificationRepository;
+    private final NotificationService    notificationService;
 
     @Transactional
     public Friendship sendRequest(UUID requesterId, UUID targetId) {
@@ -43,17 +40,9 @@ public class FriendshipService {
                 Friendship.create(userA, userB, requesterId)
         );
 
-        Notification notif = notificationRepository.save(
-                Notification.builder()
-                        .idUser(targetId)
-                        .tpNotif(NotifType.friend_request)
-                        .dsTitle("Friend Request")
-                        .dsBody("Someone sent you a friend request")
-                        .jsPayload(Map.of("from", requesterId.toString()))
-                        .build()
-        );
-
-        chatHandler.sendToUser(targetId, Map.of("type", "NOTIFICATION", "data", notif));
+        notificationService.send(targetId, NotifType.friend_request,
+                "Friend Request", "Someone sent you a friend request",
+                Map.of("from", requesterId.toString()));
 
         return saved;
     }
@@ -71,17 +60,9 @@ public class FriendshipService {
         f.setStStatus(FriendStatus.accepted);
         Friendship saved = friendshipRepository.save(f);
 
-        Notification notif = notificationRepository.save(
-                Notification.builder()
-                        .idUser(requesterId)
-                        .tpNotif(NotifType.friend_accepted)
-                        .dsTitle("Friend Request Accepted")
-                        .dsBody("Your friend request was accepted.")
-                        .jsPayload(Map.of("by", acceptorId.toString()))
-                        .build()
-        );
-
-        chatHandler.sendToUser(requesterId, Map.of("type", "NOTIFICATION", "data", notif));
+        notificationService.send(requesterId, NotifType.friend_accepted,
+                "Friend Request Accepted", "Your friend request was accepted.",
+                Map.of("by", acceptorId.toString()));
 
         return saved;
     }
@@ -100,17 +81,9 @@ public class FriendshipService {
         friendshipRepository.delete(f);
 
         if (otherPersonSentIt) {
-            Notification notif = notificationRepository.save(
-                    Notification.builder()
-                            .idUser(requesterId)
-                            .tpNotif(NotifType.system)
-                            .dsTitle("Friend Request Declined")
-                            .dsBody("Your friend request was declined.")
-                            .jsPayload(Map.of("by", userId.toString()))
-                            .build()
-            );
-
-            chatHandler.sendToUser(requesterId, Map.of("type", "NOTIFICATION", "data", notif));
+            notificationService.send(requesterId, NotifType.system,
+                    "Friend Request Declined", "Your friend request was declined.",
+                    Map.of("by", userId.toString()));
         }
     }
 

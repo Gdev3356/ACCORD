@@ -26,7 +26,9 @@ import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.ZonedDateTime;
@@ -34,6 +36,7 @@ import java.util.HexFormat;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -224,6 +227,12 @@ public class UploadService {
             ext              = ".webp";             // ← was .jpg
         }
 
+        if (contentType.startsWith("audio/")) {
+            bytes            = toOpus(bytes);
+            finalContentType = "audio/ogg";
+            ext              = ".ogg";
+        }
+
         // ── Deduplication ─────────────────────────────────────────────────────
         String hash = sha256(bytes);
         Optional<MsAttachment> existing = msAttachmentRepository.findByDsSha256(hash);
@@ -316,6 +325,12 @@ public class UploadService {
             bytes            = toWebp(img);         // ← was toJpeg
             finalContentType = "image/webp";        // ← was image/jpeg
             ext              = ".webp";             // ← was .jpg
+        }
+
+        if (contentType.startsWith("audio/")) {
+            bytes            = toOpus(bytes);
+            finalContentType = "audio/ogg";
+            ext              = ".ogg";
         }
 
         // ── Deduplication ─────────────────────────────────────────────────────
@@ -448,6 +463,37 @@ public class UploadService {
         return out.toByteArray();
     }
 
+    private byte[] toOpus(byte[] input) throws IOException {
+        File inFile  = File.createTempFile("accord_ain_",  ".tmp");
+        File outFile = File.createTempFile("accord_aout_", ".ogg");
+        try {
+            Files.write(inFile.toPath(), input);
+
+            ProcessBuilder pb = new ProcessBuilder(
+                    "ffmpeg", "-y",
+                    "-i", inFile.getAbsolutePath(),
+                    "-c:a", "libopus",
+                    "-b:a", "64k",          // 64 kbps — matches WhatsApp voice notes
+                    "-vbr", "on",
+                    "-compression_level", "10",
+                    outFile.getAbsolutePath()
+            );
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            if (!p.waitFor(60, TimeUnit.SECONDS))
+                throw new RuntimeException("FFmpeg audio conversion timed out");
+            if (p.exitValue() != 0)
+                throw new RuntimeException("FFmpeg exited with code " + p.exitValue());
+
+            return Files.readAllBytes(outFile.toPath());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Audio conversion interrupted", e);
+        } finally {
+            inFile.delete();
+            outFile.delete();
+        }
+    }
     // =========================================================================
     // Misc helpers
     // =========================================================================
