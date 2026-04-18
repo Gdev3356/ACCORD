@@ -8,8 +8,6 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.core.userdetails.UserDetailsService;
 
-import java.util.UUID;
-
 @SpringBootApplication
 @EnableAsync
 @EnableScheduling

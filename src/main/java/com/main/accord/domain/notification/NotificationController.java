@@ -16,23 +16,22 @@ import java.util.UUID;
 public class NotificationController {
 
     private final NotificationService   notificationService;
-    private final NotificationRepository notificationRepository;
 
     // GET /api/v1/notifications
     @GetMapping
-    public ResponseEntity<ApiResponse<List<Notification>>> getAll(
+    public ResponseEntity<ApiResponse<List<NotificationDto>>> getAll(
             @AuthenticationPrincipal AccordPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
-                notificationRepository.findAllByUser(principal.userId())
+                notificationService.getAllForUser(principal.userId())
         ));
     }
 
     // GET /api/v1/notifications/unread
     @GetMapping("/unread")
-    public ResponseEntity<ApiResponse<List<Notification>>> getUnread(
+    public ResponseEntity<ApiResponse<List<NotificationDto>>> getUnread(
             @AuthenticationPrincipal AccordPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
-                notificationRepository.findUnreadByUser(principal.userId())
+                notificationService.getForUser(principal.userId())
         ));
     }
 

@@ -97,6 +97,11 @@ public class NotificationService {
         notificationRepository.saveAll(unread);
     }
 
+    public List<NotificationDto> getAllForUser(UUID userId) {
+        return notificationRepository.findAllByUser(userId).stream()
+                .map(this::decrypt)
+                .toList();
+    }
     // -------------------------------------------------------------------------
     //  Fetch + decrypt  (for REST GET /notifications)
     // -------------------------------------------------------------------------

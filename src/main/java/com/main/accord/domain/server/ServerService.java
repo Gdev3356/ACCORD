@@ -110,7 +110,7 @@ public class ServerService {
                 Role.builder()
                         .idServer(server.getIdServer())
                         .dsName("Admin")
-                        .nrPermissions(Permissions.ADMINISTRATOR)  // Just the ADMIN bit!
+                        .nrPermissions(Permissions.ADMINISTRATOR | Permissions.MANAGE_SERVER)   // Just the ADMIN bit!
                         .nrPosition((short) 100)  // High position
                         .build()
         );
