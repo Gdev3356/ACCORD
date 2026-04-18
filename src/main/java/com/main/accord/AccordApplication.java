@@ -1,5 +1,6 @@
 package com.main.accord;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -22,5 +23,10 @@ public class AccordApplication {
 	public UserDetailsService userDetailsService() {
 		// Satisfies Spring Security's requirement — actual auth is handled by JwtAuthFilter
 		return username -> { throw new UnsupportedOperationException("Use JWT auth"); };
+	}
+
+	@Bean
+	public ObjectMapper objectMapper() {
+		return new ObjectMapper();
 	}
 }
