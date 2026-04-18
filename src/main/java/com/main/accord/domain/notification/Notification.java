@@ -1,7 +1,5 @@
 package com.main.accord.domain.notification;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -34,7 +32,6 @@ public class Notification {
     @Column(name = "DS_BODY", columnDefinition = "TEXT")
     private String dsBody;
 
-    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "js_payload") // now a plain text/varchar column
     private String jsPayload;    // stores encrypted JSON string
 
