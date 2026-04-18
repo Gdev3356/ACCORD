@@ -1,5 +1,6 @@
 package com.main.accord.domain.notification;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 
@@ -10,11 +11,24 @@ import java.util.UUID;
 @Data
 @Builder
 public class NotificationDto {
-    private UUID                 id;
-    private NotifType            type;
-    private String               title;
-    private String               body;
-    private Map<String, Object>  payload;
-    private boolean              read;
-    private OffsetDateTime       createdAt;
+    @JsonProperty("idNotif")
+    private UUID id;
+
+    @JsonProperty("tpNotif")
+    private NotifType type;
+
+    @JsonProperty("dsTitle")
+    private String title;
+
+    @JsonProperty("dsBody")
+    private String body;
+
+    @JsonProperty("jsPayload")
+    private Map<String, Object> payload;
+
+    @JsonProperty("stRead")
+    private boolean read;
+
+    @JsonProperty("dtCreated")
+    private OffsetDateTime createdAt;
 }
