@@ -477,6 +477,7 @@ public class ServerService {
                 .idServer(s.getIdServer())
                 .dsName(s.getDsName())
                 .dsIconUrl(s.getDsIconUrl())
+                .dsDescription(s.getDsDescription())
                 .nrUnread(unreadMap.getOrDefault(s.getIdServer(), 0L))
                 .build()
         ).toList();

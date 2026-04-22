@@ -10,5 +10,6 @@ public class ServerSummaryDto {
     private UUID   idServer;
     private String dsName;
     private String dsIconUrl;
+    private String dsDescription;
     private long   nrUnread;
 }
