@@ -146,7 +146,7 @@ public class AbLevelService {
      * Triggers relevant achievement checks after saving.
      */
 
-    private static final int MAX_SCORE_MULTIPLIER = 10;
+    private static final int MAX_SCORE_MULTIPLIER = 100;
 
     @Transactional
     public AbScore submitScore(UUID userId, UUID levelId, int score, short stars) {
