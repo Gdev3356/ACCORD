@@ -53,10 +53,12 @@ public class ServerService {
                 .orElseThrow(() -> new NotFoundException("Server not found."));
     }
 
-    public List<Member> getMembers(UUID serverId, UUID requesterId) {
+    public org.springframework.data.domain.Page<Member> getMembers(
+            UUID serverId, UUID requesterId,
+            org.springframework.data.domain.Pageable pageable) {
         if (!memberRepository.existsByIdServerAndIdUser(serverId, requesterId))
             throw new ForbiddenException("You are not a member of this server.");
-        return memberRepository.findByIdServer(serverId);
+        return memberRepository.findByIdServer(serverId, pageable);
     }
 
     // ── Create ────────────────────────────────────────────────────────────────

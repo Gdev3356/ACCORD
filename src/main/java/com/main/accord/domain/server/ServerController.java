@@ -79,14 +79,14 @@ public class ServerController {
 
     // GET /api/v1/servers/{serverId}/members
     @GetMapping("/{serverId}/members")
-    public ResponseEntity<ApiResponse<List<Member>>> getMembers(
+    public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<Member>>> getMembers(
             @PathVariable UUID serverId,
-            @AuthenticationPrincipal AccordPrincipal principal) {
+            @AuthenticationPrincipal AccordPrincipal principal,
+            org.springframework.data.domain.Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(
-                serverService.getMembers(serverId, principal.userId())
+                serverService.getMembers(serverId, principal.userId(), pageable)
         ));
     }
-
     // DELETE /api/v1/servers/{serverId}/members/{userId}  (kick)
     @DeleteMapping("/{serverId}/members/{userId}")
     public ResponseEntity<ApiResponse<Void>> kickMember(
