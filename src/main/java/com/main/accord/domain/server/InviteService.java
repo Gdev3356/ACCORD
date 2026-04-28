@@ -195,15 +195,7 @@ public class InviteService {
         webhookService.executeMemberJoinWebhook(serverId, userId, displayName, handle, pfpUrl);
 
         // Broadcast to all server members
-        List<Member> allMembers = memberRepository.findByIdServer(serverId);
-        for (Member member : allMembers) {
-            if (!member.getIdUser().equals(userId)) {
-                chatHandler.sendToUser(member.getIdUser(), Map.of(
-                        "type", "MEMBER_JOIN",
-                        "data", memberData
-                ));
-            }
-        }
+        chatHandler.broadcastToServer(serverId, new ChatHandler.ChatEvent("MEMBER_JOIN", memberData));
 
         Role everyoneRole = roleRepository.findByIdServerAndDsName(serverId, "@everyone")
                 .orElseThrow(() -> new NotFoundException("@everyone role not found for server " + serverId));

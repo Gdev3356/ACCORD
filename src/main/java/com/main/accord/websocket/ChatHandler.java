@@ -175,6 +175,10 @@ public class ChatHandler {
         return null;
     }
 
+    public void broadcastToServer(UUID serverId, Object payload) {
+        broker.convertAndSend("/topic/server." + serverId, payload);
+    }
+
     // ── Types ─────────────────────────────────────────────────────────────────
 
     public record ChatEvent(String type, Object data) {}
