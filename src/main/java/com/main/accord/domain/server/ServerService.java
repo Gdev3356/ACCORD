@@ -26,19 +26,19 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ServerService {
 
-    private final ServerRepository  serverRepository;
-    private final MemberRepository  memberRepository;
-    private final RoleRepository    roleRepository;
-    private final InviteService     inviteService;
-    private final BanService        banService;
-    private final PermissionService permissionService;
-    private final ChatHandler       chatHandler;
-    private final NotificationService notificationService;
+    private final ServerRepository      serverRepository;
+    private final MemberRepository      memberRepository;
+    private final RoleRepository        roleRepository;
+    private final InviteService         inviteService;
+    private final BanService            banService;
+    private final PermissionService     permissionService;
+    private final ChatHandler           chatHandler;
+    private final NotificationService   notificationService;
     private final ChReadStateRepository chReadStateRepository;
-    private final AccountRepository  accountRepository;
-    private final WebhookService     webhookService;
-    private final VisualsRepository visualsRepository;
-    private final MemberRoleRepository memberRoleRepository;
+    private final AccountRepository     accountRepository;
+    private final WebhookService        webhookService;
+    private final VisualsRepository     visualsRepository;
+    private final MemberRoleRepository  memberRoleRepository;
 
     // ── List ──────────────────────────────────────────────────────────────────
 
@@ -47,17 +47,15 @@ public class ServerService {
     }
 
     public Server getServer(UUID serverId, UUID requesterId) {
-        if (!memberRepository.existsByIdServerAndIdUser(serverId, requesterId)) {
+        if (!memberRepository.existsByIdServerAndIdUser(serverId, requesterId))
             throw new ForbiddenException("You are not a member of this server.");
-        }
         return serverRepository.findById(serverId)
                 .orElseThrow(() -> new NotFoundException("Server not found."));
     }
 
     public List<Member> getMembers(UUID serverId, UUID requesterId) {
-        if (!memberRepository.existsByIdServerAndIdUser(serverId, requesterId)) {
+        if (!memberRepository.existsByIdServerAndIdUser(serverId, requesterId))
             throw new ForbiddenException("You are not a member of this server.");
-        }
         return memberRepository.findByIdServer(serverId);
     }
 
@@ -65,7 +63,6 @@ public class ServerService {
 
     @Transactional
     public Server createServer(UUID ownerId, String name) {
-        // Server with 0 permissions
         Server server = serverRepository.save(
                 Server.builder()
                         .idOwner(ownerId)
@@ -74,7 +71,6 @@ public class ServerService {
                         .build()
         );
 
-        // Add owner as member
         memberRepository.save(
                 Member.builder()
                         .idServer(server.getIdServer())
@@ -82,7 +78,6 @@ public class ServerService {
                         .build()
         );
 
-        // Create @everyone role
         long everyonePermissions = Permissions.VIEW_CHANNELS |
                 Permissions.SEND_MESSAGES |
                 Permissions.READ_MESSAGE_HISTORY;
@@ -96,7 +91,6 @@ public class ServerService {
                         .build()
         );
 
-        // Assign @everyone to owner
         memberRoleRepository.save(
                 MemberRole.builder()
                         .idServer(server.getIdServer())
@@ -105,17 +99,15 @@ public class ServerService {
                         .build()
         );
 
-        // Create Admin role for owner (optional but recommended)
         Role adminRole = roleRepository.save(
                 Role.builder()
                         .idServer(server.getIdServer())
                         .dsName("Admin")
-                        .nrPermissions(Permissions.ADMINISTRATOR | Permissions.MANAGE_SERVER)   // Just the ADMIN bit!
-                        .nrPosition((short) 100)  // High position
+                        .nrPermissions(Permissions.ADMINISTRATOR | Permissions.MANAGE_SERVER)
+                        .nrPosition((short) 100)
                         .build()
         );
 
-        // Assign Admin role to owner
         memberRoleRepository.save(
                 MemberRole.builder()
                         .idServer(server.getIdServer())
@@ -131,9 +123,9 @@ public class ServerService {
 
     @Transactional
     public Server updateServer(UUID serverId, UUID requesterId, UpdateServerRequest req) {
-        if (!permissionService.can(requesterId, null, serverId, Permissions.MANAGE_SERVER)) {
+        if (!permissionService.can(requesterId, null, serverId, Permissions.MANAGE_SERVER))
             throw new ForbiddenException("You don't have permission to manage this server.");
-        }
+
         Server server = serverRepository.findById(serverId)
                 .orElseThrow(() -> new NotFoundException("Server not found."));
 
@@ -152,9 +144,8 @@ public class ServerService {
     public void deleteServer(UUID serverId, UUID requesterId) {
         Server server = serverRepository.findById(serverId)
                 .orElseThrow(() -> new NotFoundException("Server not found."));
-        if (!server.getIdOwner().equals(requesterId)) {
+        if (!server.getIdOwner().equals(requesterId))
             throw new ForbiddenException("Only the server owner can delete this server.");
-        }
         serverRepository.delete(server);
     }
 
@@ -164,42 +155,34 @@ public class ServerService {
     public void kickMember(UUID requesterId, UUID serverId, UUID targetId, String reason) {
         Server server = serverRepository.findById(serverId)
                 .orElseThrow(() -> new NotFoundException("Server not found."));
-        if (server.getIdOwner().equals(targetId)) {
+        if (server.getIdOwner().equals(targetId))
             throw new ForbiddenException("Cannot kick the server owner.");
-        }
-        if (!permissionService.can(requesterId, null, serverId, Permissions.KICK_MEMBERS)) {
+        if (!permissionService.can(requesterId, null, serverId, Permissions.KICK_MEMBERS))
             throw new ForbiddenException("You don't have permission to kick members.");
-        }
+
         assertRoleHierarchy(requesterId, targetId, serverId);
 
-        Account targetAccount = accountRepository.findById(targetId).orElse(null);
+        Account targetAccount    = accountRepository.findById(targetId).orElse(null);
         Account moderatorAccount = accountRepository.findById(requesterId).orElse(null);
-        String targetName = targetAccount != null ? targetAccount.getDsDisplayName() : "User";
+        String targetName    = targetAccount    != null ? targetAccount.getDsDisplayName()    : "User";
         String moderatorName = moderatorAccount != null ? moderatorAccount.getDsDisplayName() : "Moderator";
 
         memberRepository.deleteByIdServerAndIdUser(serverId, targetId);
-
         webhookService.executeMemberKickWebhook(serverId, targetId, requesterId, targetName, moderatorName, reason);
 
         chatHandler.sendToUser(targetId, Map.of(
                 "type", "SERVER_KICK",
                 "data", Map.of(
-                        "serverId", serverId,
-                        "serverName", server.getDsName(),
-                        "reason", reason != null ? reason : ""
+                        "serverId",    serverId,
+                        "serverName",  server.getDsName(),
+                        "reason",      reason != null ? reason : ""
                 )
         ));
 
-        notificationService.send(
-                targetId,
-                NotifType.ban,
+        notificationService.send(targetId, NotifType.ban,
                 "You were kicked from " + server.getDsName(),
                 reason != null ? reason : "No reason provided",
-                Map.of(
-                        "serverId", serverId.toString(),
-                        "serverName", server.getDsName(),
-                        "type", "server_kick"
-                )
+                Map.of("serverId", serverId.toString(), "serverName", server.getDsName(), "type", "server_kick")
         );
     }
 
@@ -209,42 +192,37 @@ public class ServerService {
     public void leaveServer(UUID serverId, UUID userId) {
         Server server = serverRepository.findById(serverId)
                 .orElseThrow(() -> new NotFoundException("Server not found."));
-        if (server.getIdOwner().equals(userId)) {
+        if (server.getIdOwner().equals(userId))
             throw new AccordException("Transfer ownership before leaving.");
-        }
-        if (!memberRepository.existsByIdServerAndIdUser(serverId, userId)) {
+        if (!memberRepository.existsByIdServerAndIdUser(serverId, userId))
             throw new NotFoundException("You are not a member of this server.");
-        }
 
         Account account = accountRepository.findById(userId).orElse(null);
         Visuals visuals = visualsRepository.findById(userId).orElse(null);
         String userDisplayName = account != null ? account.getDsDisplayName() : "User";
-        String userHandle = account != null ? account.getDsHandle() : "@handle";
+        String userHandle      = account != null ? account.getDsHandle()      : "@handle";
         String pfpUrl = (visuals != null && visuals.getDsPfpUrl() != null)
                 ? visuals.getDsPfpUrl()
                 : "https://i.imgur.com/eTh2muI.png";
 
         memberRepository.deleteByIdServerAndIdUser(serverId, userId);
-
         webhookService.executeMemberLeaveWebhook(serverId, userId, userDisplayName, userHandle, pfpUrl);
     }
 
-    // ── Timeout Member ────────────────────────────────────────────────────────
+    // ── Timeout ───────────────────────────────────────────────────────────────
 
     @Transactional
     public Member timeoutMember(UUID requesterId, UUID serverId, UUID targetId,
                                 int durationMinutes, String reason) {
-        if (!permissionService.can(requesterId, null, serverId, Permissions.TIMEOUT_MEMBERS)) {
+        if (!permissionService.can(requesterId, null, serverId, Permissions.TIMEOUT_MEMBERS))
             throw new ForbiddenException("You don't have permission to timeout members.");
-        }
 
         assertRoleHierarchy(requesterId, targetId, serverId);
 
         Server server = serverRepository.findById(serverId)
                 .orElseThrow(() -> new NotFoundException("Server not found."));
-        if (server.getIdOwner().equals(targetId)) {
+        if (server.getIdOwner().equals(targetId))
             throw new ForbiddenException("Cannot timeout the server owner.");
-        }
 
         Member member = memberRepository.findByIdServerAndIdUser(serverId, targetId)
                 .orElseThrow(() -> new NotFoundException("Member not found."));
@@ -252,42 +230,33 @@ public class ServerService {
         OffsetDateTime expiresAt = OffsetDateTime.now().plusMinutes(durationMinutes);
         member.setStTimeout(true);
         member.setDtTimeoutExpires(expiresAt);
-
         Member saved = memberRepository.save(member);
 
-        Account targetAccount = accountRepository.findById(targetId).orElse(null);
+        Account targetAccount    = accountRepository.findById(targetId).orElse(null);
         Account moderatorAccount = accountRepository.findById(requesterId).orElse(null);
-        String targetName = targetAccount != null ? targetAccount.getDsDisplayName() : "User";
+        String targetName    = targetAccount    != null ? targetAccount.getDsDisplayName()    : "User";
         String moderatorName = moderatorAccount != null ? moderatorAccount.getDsDisplayName() : "Moderator";
 
-        webhookService.executeMemberTimeoutWebhook(serverId, targetId, requesterId, targetName, moderatorName, durationMinutes, reason);
+        webhookService.executeMemberTimeoutWebhook(serverId, targetId, requesterId,
+                targetName, moderatorName, durationMinutes, reason);
 
-        // WebSocket notification
         chatHandler.sendToUser(targetId, Map.of(
                 "type", "MEMBER_TIMEOUT",
                 "data", Map.of(
-                        "serverId", serverId,
-                        "serverName", server.getDsName(),
-                        "expiresAt", expiresAt.toString(),
+                        "serverId",        serverId,
+                        "serverName",      server.getDsName(),
+                        "expiresAt",       expiresAt.toString(),
                         "durationMinutes", durationMinutes,
-                        "reason", reason != null ? reason : ""
+                        "reason",          reason != null ? reason : ""
                 )
         ));
 
-        // Persistent notification
-        notificationService.send(
-                targetId,
-                NotifType.timeout,
+        notificationService.send(targetId, NotifType.timeout,
                 "You have been timed out",
                 "You were timed out in " + server.getDsName() + " for " + durationMinutes + " minutes.",
-                Map.of(
-                        "serverId", serverId.toString(),
-                        "serverName", server.getDsName(),
-                        "durationMinutes", durationMinutes,
-                        "expiresAt", expiresAt.toString(),
-                        "reason", reason != null ? reason : "",
-                        "type", "server_timeout"
-                )
+                Map.of("serverId", serverId.toString(), "serverName", server.getDsName(),
+                        "durationMinutes", durationMinutes, "expiresAt", expiresAt.toString(),
+                        "reason", reason != null ? reason : "", "type", "server_timeout")
         );
 
         return saved;
@@ -295,9 +264,8 @@ public class ServerService {
 
     @Transactional
     public void removeTimeout(UUID requesterId, UUID serverId, UUID targetId) {
-        if (!permissionService.can(requesterId, null, serverId, Permissions.TIMEOUT_MEMBERS)) {
+        if (!permissionService.can(requesterId, null, serverId, Permissions.TIMEOUT_MEMBERS))
             throw new ForbiddenException("You don't have permission to remove timeouts.");
-        }
 
         Server server = serverRepository.findById(serverId)
                 .orElseThrow(() -> new NotFoundException("Server not found."));
@@ -311,22 +279,13 @@ public class ServerService {
 
         chatHandler.sendToUser(targetId, Map.of(
                 "type", "MEMBER_TIMEOUT_REMOVED",
-                "data", Map.of(
-                        "serverId", serverId,
-                        "serverName", server.getDsName()
-                )
+                "data", Map.of("serverId", serverId, "serverName", server.getDsName())
         ));
 
-        notificationService.send(
-                targetId,
-                NotifType.timeout,
+        notificationService.send(targetId, NotifType.timeout,
                 "Timeout removed",
                 "Your timeout has been removed in " + server.getDsName(),
-                Map.of(
-                        "serverId", serverId.toString(),
-                        "serverName", server.getDsName(),
-                        "type", "timeout_removed"
-                )
+                Map.of("serverId", serverId.toString(), "serverName", server.getDsName(), "type", "timeout_removed")
         );
     }
 
@@ -336,8 +295,7 @@ public class ServerService {
         List<Member> expiredMembers = memberRepository.findExpiredTimeouts(OffsetDateTime.now());
         for (Member member : expiredMembers) {
             UUID serverId = member.getIdServer();
-            UUID userId = member.getIdUser();
-
+            UUID userId   = member.getIdUser();
             Server server = serverRepository.findById(serverId).orElse(null);
 
             member.setStTimeout(false);
@@ -347,22 +305,12 @@ public class ServerService {
             if (server != null) {
                 chatHandler.sendToUser(userId, Map.of(
                         "type", "MEMBER_TIMEOUT_EXPIRED",
-                        "data", Map.of(
-                                "serverId", serverId,
-                                "serverName", server.getDsName()
-                        )
+                        "data", Map.of("serverId", serverId, "serverName", server.getDsName())
                 ));
-
-                notificationService.send(
-                        userId,
-                        NotifType.timeout,
+                notificationService.send(userId, NotifType.timeout,
                         "Timeout expired",
                         "Your timeout has expired in " + server.getDsName(),
-                        Map.of(
-                                "serverId", serverId.toString(),
-                                "serverName", server.getDsName(),
-                                "type", "timeout_expired"
-                        )
+                        Map.of("serverId", serverId.toString(), "serverName", server.getDsName(), "type", "timeout_expired")
                 );
             }
         }
@@ -370,43 +318,32 @@ public class ServerService {
 
     @Transactional
     public Member changeNickname(UUID serverId, UUID targetUserId, UUID requesterId, String nickname) {
-        Server server = serverRepository.findById(serverId)
-                .orElseThrow(() -> new NotFoundException("Server not found."));
-
-        boolean isSelf = targetUserId.equals(requesterId);
+        boolean isSelf    = targetUserId.equals(requesterId);
         boolean canManage = permissionService.can(requesterId, null, serverId, Permissions.MANAGE_NICKNAMES);
 
-        if (!isSelf && !canManage) {
+        if (!isSelf && !canManage)
             throw new ForbiddenException("You don't have permission to change other members' nicknames.");
-        }
-
-        if (!isSelf) {
+        if (!isSelf)
             assertRoleHierarchy(requesterId, targetUserId, serverId);
-        }
 
         Member member = memberRepository.findByIdServerAndIdUser(serverId, targetUserId)
                 .orElseThrow(() -> new NotFoundException("Member not found."));
 
-        if (nickname != null && (nickname.isEmpty()|| nickname.length() > 50)) {
+        if (nickname != null && (nickname.isEmpty() || nickname.length() > 50))
             throw new AccordException("Nickname must be between 1 and 50 characters.");
-        }
 
         member.setDsNickname(nickname);
         Member saved = memberRepository.save(member);
 
         chatHandler.broadcastToChannel(serverId, Map.of(
                 "type", "MEMBER_NICKNAME_CHANGE",
-                "data", Map.of(
-                        "serverId", serverId,
-                        "userId", targetUserId,
-                        "nickname", nickname
-                )
+                "data", Map.of("serverId", serverId, "userId", targetUserId, "nickname", nickname)
         ));
 
         return saved;
     }
 
-    // ── Ban / Unban — delegate to BanService ──────────────────────────────────
+    // ── Ban / Unban ───────────────────────────────────────────────────────────
 
     @Transactional
     public ServerBan banMember(UUID requesterId, UUID serverId, UUID targetId, String reason) {
@@ -424,16 +361,14 @@ public class ServerService {
                 .orElseThrow(() -> new NotFoundException("Member not found."));
 
         if (req.muted() != null) {
-            if (!permissionService.can(requesterId, null, serverId, Permissions.MUTE_MEMBERS)) {
+            if (!permissionService.can(requesterId, null, serverId, Permissions.MUTE_MEMBERS))
                 throw new ForbiddenException("You don't have permission to mute members.");
-            }
             member.setStMuted(req.muted());
         }
 
         if (req.deafened() != null) {
-            if (!permissionService.can(requesterId, null, serverId, Permissions.DEAFEN_MEMBERS)) {
+            if (!permissionService.can(requesterId, null, serverId, Permissions.DEAFEN_MEMBERS))
                 throw new ForbiddenException("You don't have permission to deafen members.");
-            }
             member.setStDeafened(req.deafened());
         }
 
@@ -441,25 +376,23 @@ public class ServerService {
 
         chatHandler.sendToUser(targetId, Map.of(
                 "type", "MEMBER_UPDATE",
-                "data", Map.of(
-                        "serverId",  serverId,
-                        "muted",     saved.getStMuted(),
-                        "deafened",  saved.getStDeafened()
-                )
+                "data", Map.of("serverId", serverId, "muted", saved.getStMuted(), "deafened", saved.getStDeafened())
         ));
 
         return saved;
     }
 
-    public record UpdateMemberRequest(Boolean muted, Boolean deafened) {}
-
-    // ── Join by invite — delegate to InviteService ────────────────────────────
+    // ── Join by invite ────────────────────────────────────────────────────────
 
     @Transactional
     public Invite joinByInvite(UUID userId, String code) {
         return inviteService.joinByCode(userId, code);
     }
 
+    /**
+     * Uses the typed ChReadStateRepository.ServerUnreadCount projection.
+     * Previously cast Object[] by position — now fully type-safe.
+     */
     public List<ServerSummaryDto> getServerSummaries(UUID userId) {
         List<Server> servers = serverRepository.findByMember(userId);
         if (servers.isEmpty()) return List.of();
@@ -467,10 +400,11 @@ public class ServerService {
         List<UUID> serverIds = servers.stream().map(Server::getIdServer).toList();
 
         Map<UUID, Long> unreadMap = chReadStateRepository
-                .countUnreadPerServer(userId, serverIds).stream()
+                .countUnreadPerServer(userId, serverIds)
+                .stream()
                 .collect(Collectors.toMap(
-                        row -> UUID.fromString(row[0].toString()),
-                        row -> ((Number) row[1]).longValue()
+                        row -> UUID.fromString(row.getServerId()),
+                        ChReadStateRepository.ServerUnreadCount::getUnreadCount
                 ));
 
         return servers.stream().map(s -> ServerSummaryDto.builder()
@@ -482,28 +416,24 @@ public class ServerService {
                 .build()
         ).toList();
     }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void assertRoleHierarchy(UUID requesterId, UUID targetId, UUID serverId) {
         Server server = serverRepository.findById(serverId)
                 .orElseThrow(() -> new NotFoundException("Server not found."));
-
-        if (server.getIdOwner().equals(requesterId)) {
-            return;
-        }
+        if (server.getIdOwner().equals(requesterId)) return;
 
         short requesterTop = memberRepository.getHighestRolePosition(requesterId, serverId);
         short targetTop    = memberRepository.getHighestRolePosition(targetId, serverId);
 
-        if (requesterTop >= targetTop) {
+        if (requesterTop >= targetTop)
             throw new ForbiddenException("You cannot action someone with an equal or higher role.");
-        }
     }
 
     public long getMyPermissions(UUID userId, UUID serverId) {
-        if (!memberRepository.existsByIdServerAndIdUser(serverId, userId)) {
+        if (!memberRepository.existsByIdServerAndIdUser(serverId, userId))
             throw new ForbiddenException("You are not a member of this server.");
-        }
         return permissionService.computeEffective(userId, null, serverId);
     }
 
@@ -516,7 +446,7 @@ public class ServerService {
                 .orElseThrow(() -> new NotFoundException("Member not found."));
     }
 
-    // ── Request records ───────────────────────────────────────────────────────
+    public record UpdateMemberRequest(Boolean muted, Boolean deafened) {}
 
     public record UpdateServerRequest(
             String  name,

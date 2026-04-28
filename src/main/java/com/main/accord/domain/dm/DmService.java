@@ -32,14 +32,16 @@ public class DmService {
     private final DmMessageRepository     dmMessageRepository;
     private final FriendshipRepository    friendshipRepository;
     private final ChatHandler             chatHandler;
-    private final DmReadStateRepository dmReadStateRepository;
-    public record SendMessageRequest(String content, UUID replyToId, UUID forwardAttachmentFrom, String tpMessage, Map<String, Object> jsActivity) {}
-    private final NotificationService notificationService;
-    private final AccountRepository accountRepository; // to resolve sender name
-    private final VisualsRepository visualsRepository;
-    private final DmAttachmentRepository dmAttachmentRepository;
-    private final EncryptionService encryptionService;
-    private final MsAttachmentRepository msAttachmentRepository;
+    private final DmReadStateRepository   dmReadStateRepository;
+    private final NotificationService     notificationService;
+    private final AccountRepository       accountRepository;
+    private final VisualsRepository       visualsRepository;
+    private final DmAttachmentRepository  dmAttachmentRepository;
+    private final EncryptionService       encryptionService;
+    private final MsAttachmentRepository  msAttachmentRepository;
+
+    public record SendMessageRequest(String content, UUID replyToId, UUID forwardAttachmentFrom,
+                                     String tpMessage, Map<String, Object> jsActivity) {}
 
     public List<Conversation> getConversations(UUID userId) {
         return conversationRepository.findAllByParticipant(userId);
@@ -54,23 +56,17 @@ public class DmService {
                             Conversation.builder().stGroup(false).build()
                     );
                     participantRepository.saveAll(List.of(
-                            Participant.builder()
-                                    .idConversation(convo.getIdConversation())
-                                    .idUser(requesterId).build(),
-                            Participant.builder()
-                                    .idConversation(convo.getIdConversation())
-                                    .idUser(targetId).build()
+                            Participant.builder().idConversation(convo.getIdConversation()).idUser(requesterId).build(),
+                            Participant.builder().idConversation(convo.getIdConversation()).idUser(targetId).build()
                     ));
 
-                    // Send a SYSTEM MESSAGE inside the DM
                     String requesterName = accountRepository.findById(requesterId)
                             .map(Account::getDsDisplayName).orElse("User");
                     String targetName = accountRepository.findById(targetId)
                             .map(Account::getDsDisplayName).orElse("User");
 
-                    String systemMessage = String.format("💬 **%s** started a conversation with **%s**",
-                            requesterName, targetName);
-                    sendSystemMessage(convo.getIdConversation(), systemMessage);
+                    sendSystemMessage(convo.getIdConversation(),
+                            String.format("💬 **%s** started a conversation with **%s**", requesterName, targetName));
 
                     return convo;
                 });
@@ -81,38 +77,26 @@ public class DmService {
         DmMessage saved = dmMessageRepository.save(
                 DmMessage.builder()
                         .idConversation(conversationId)
-                        .idAuthor(null)  // null = system message
+                        .idAuthor(null)
                         .dsContent(content)
                         .tpMessage("system")
                         .build()
         );
-
         DmMessage broadcast = cloneWithDecryptedContent(saved, content);
-        chatHandler.broadcastToDm(conversationId,
-                Map.of("type", "DM_MESSAGE_CREATE", "data", broadcast));
-
+        chatHandler.broadcastToDm(conversationId, Map.of("type", "DM_MESSAGE_CREATE", "data", broadcast));
         return broadcast;
     }
 
     @Transactional
     public Conversation createGroup(UUID creatorId, List<UUID> userIds, String name) {
         Conversation convo = conversationRepository.save(
-                Conversation.builder()
-                        .stGroup(true)
-                        .idOwner(creatorId)
-                        .dsName(name)
-                        .build()
+                Conversation.builder().stGroup(true).idOwner(creatorId).dsName(name).build()
         );
-        // Add creator + all invited users
         List<Participant> participants = new java.util.ArrayList<>();
-        participants.add(Participant.builder()
-                .idConversation(convo.getIdConversation())
-                .idUser(creatorId).build());
+        participants.add(Participant.builder().idConversation(convo.getIdConversation()).idUser(creatorId).build());
         for (UUID uid : userIds) {
             if (!uid.equals(creatorId)) {
-                participants.add(Participant.builder()
-                        .idConversation(convo.getIdConversation())
-                        .idUser(uid).build());
+                participants.add(Participant.builder().idConversation(convo.getIdConversation()).idUser(uid).build());
             }
         }
         participantRepository.saveAll(participants);
@@ -120,7 +104,6 @@ public class DmService {
     }
 
     private void populateForwardedFrom(List<DmMessage> messages) {
-        // 1. Collect all unique IDs of forwarded messages
         List<UUID> forwardedIds = messages.stream()
                 .map(DmMessage::getIdForwardedFrom)
                 .filter(java.util.Objects::nonNull)
@@ -129,11 +112,9 @@ public class DmService {
 
         if (forwardedIds.isEmpty()) return;
 
-        // 2. Batch fetch original messages
         Map<UUID, DmMessage> originalsMap = dmMessageRepository.findAllById(forwardedIds).stream()
                 .collect(java.util.stream.Collectors.toMap(DmMessage::getIdMessage, m -> m));
 
-        // 3. FIX: Use the correct ID getter for the Account entity
         List<UUID> authorIds = originalsMap.values().stream()
                 .map(DmMessage::getIdAuthor)
                 .filter(java.util.Objects::nonNull)
@@ -142,34 +123,24 @@ public class DmService {
 
         Map<UUID, String> authorNamesMap = accountRepository.findAllById(authorIds).stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        Account::getIdUser, // Changed from getIdAccount to getIdUser
+                        Account::getIdUser,
                         Account::getDsDisplayName,
-                        (existing, replacement) -> existing // Handle duplicates just in case
+                        (existing, replacement) -> existing
                 ));
 
-        // 4. Map back to DTOs
         messages.stream()
                 .filter(m -> m.getIdForwardedFrom() != null)
                 .forEach(m -> {
                     DmMessage original = originalsMap.get(m.getIdForwardedFrom());
                     if (original != null) {
-
                         decrypt(original);
-                        String plainContent = original.getDsContent();
-
-                        // Fallback to "User" if author name is missing
                         String name = authorNamesMap.getOrDefault(original.getIdAuthor(), "User");
-
                         m.setForwardedFrom(new DmMessage.ForwardedFromDto(
-                                original.getIdMessage(),
-                                original.getIdAuthor(),
-                                name
-                        ));
+                                original.getIdMessage(), original.getIdAuthor(), name));
                     }
                 });
     }
 
-    // Single message variant
     private void populateForwardedFrom(DmMessage msg) {
         populateForwardedFrom(List.of(msg));
     }
@@ -186,12 +157,10 @@ public class DmService {
         decryptAll(msgs);
         populateForwardedFrom(msgs);
 
-        // Touch last-accessed for all attachments on this page in one UPDATE
         List<UUID> ids = msgs.stream().map(DmMessage::getIdMessage).toList();
         if (!ids.isEmpty()) {
             dmAttachmentRepository.touchByMessageIds(ids, ZonedDateTime.now());
         }
-
         return msgs;
     }
 
@@ -201,7 +170,6 @@ public class DmService {
                                  String tpMessage, Map<String, Object> jsActivity) {
         assertParticipant(conversationId, authorId);
 
-        // Encrypt before persisting
         String encryptedContent = content != null ? encryptionService.encrypt(content) : null;
 
         DmMessage saved = dmMessageRepository.save(
@@ -216,12 +184,10 @@ public class DmService {
                         .build()
         );
 
-        // Write plaintext into the search vector — content is never stored as plaintext
         if (content != null && !content.isBlank()) {
             dmMessageRepository.updateSearchVector(saved.getIdMessage(), content);
         }
 
-        // ── Clone attachments from forwarded message ───────────────────────
         if (forwardAttachmentFrom != null) {
             List<DmAttachment> originals = dmAttachmentRepository.findByIdMessage(forwardAttachmentFrom);
             if (!originals.isEmpty()) {
@@ -241,46 +207,34 @@ public class DmService {
             }
         }
 
-        // Broadcast with PLAIN text — never send ciphertext to clients
         DmMessage broadcast = cloneWithDecryptedContent(saved, content);
-        chatHandler.broadcastToDm(conversationId,
-                Map.of("type", "DM_MESSAGE_CREATE", "data", broadcast));
+        chatHandler.broadcastToDm(conversationId, Map.of("type", "DM_MESSAGE_CREATE", "data", broadcast));
 
-        // Notifications use plaintext content
         String senderName = accountRepository.findById(authorId)
                 .map(Account::getDsDisplayName).orElse("Someone");
 
-        // ── Reply notification ─────────────────────────────────────────────
         if (replyToId != null) {
             dmMessageRepository.findById(replyToId).ifPresent(parent -> {
                 if (parent.getIdAuthor() != null && !parent.getIdAuthor().equals(authorId)) {
-                    notificationService.send(
-                            parent.getIdAuthor(),
-                            NotifType.message,
+                    notificationService.send(parent.getIdAuthor(), NotifType.message,
                             senderName + " replied to you",
                             content != null ? content : "📎 Attachment",
                             Map.of("conversationId", conversationId.toString(),
-                                    "messageId",      saved.getIdMessage().toString())
-                    );
+                                    "messageId", saved.getIdMessage().toString()));
                 }
             });
         }
 
-        // ── Mention notifications ──────────────────────────────────────────
         if (content != null && content.contains("@")) {
             participantRepository.findByIdConversationAndDtLeftIsNull(conversationId)
                     .stream()
                     .filter(p -> !p.getIdUser().equals(authorId))
                     .forEach(p -> accountRepository.findById(p.getIdUser()).ifPresent(acc -> {
                         if (content.toLowerCase().contains("@" + acc.getDsHandle().toLowerCase())) {
-                            notificationService.send(
-                                    p.getIdUser(),
-                                    NotifType.mention,
-                                    "You were mentioned by " + senderName,
-                                    content,
+                            notificationService.send(p.getIdUser(), NotifType.mention,
+                                    "You were mentioned by " + senderName, content,
                                     Map.of("conversationId", conversationId.toString(),
-                                            "messageId",      saved.getIdMessage().toString())
-                            );
+                                            "messageId", saved.getIdMessage().toString()));
                         }
                     }));
         }
@@ -294,9 +248,8 @@ public class DmService {
     }
 
     private void assertParticipant(UUID conversationId, UUID userId) {
-        if (!participantRepository.isActiveParticipant(conversationId, userId)) {
+        if (!participantRepository.isActiveParticipant(conversationId, userId))
             throw new ForbiddenException("You are not part of this conversation.");
-        }
     }
 
     public void broadcastTyping(UUID conversationId, UUID userId) {
@@ -308,12 +261,8 @@ public class DmService {
     public List<DmMessage> searchMessages(UUID conversationId, UUID requesterId,
                                           String query, int limit) {
         assertParticipant(conversationId, requesterId);
-
-        List<DmMessage> msgs = dmMessageRepository.fullTextSearch(
-                conversationId, query, Math.min(limit, 100)
-        );
-
-        decryptAll(msgs);            // decrypt dsContent before returning
+        List<DmMessage> msgs = dmMessageRepository.fullTextSearch(conversationId, query, Math.min(limit, 100));
+        decryptAll(msgs);
         populateForwardedFrom(msgs);
         return msgs;
     }
@@ -326,34 +275,26 @@ public class DmService {
         if (!msg.getIdAuthor().equals(editorId))
             throw new ForbiddenException("You can only edit your own messages.");
 
-        // Security check: ensure they are still in the room
         assertParticipant(msg.getIdConversation(), editorId);
 
         if (msg.getDtCreated() != null &&
                 msg.getDtCreated().isBefore(OffsetDateTime.now().minusHours(3)))
             throw new ForbiddenException("Messages can only be edited within 3 hours.");
 
-        // Encrypt the new content for storage
-        String encrypted = newContent != null ? encryptionService.encrypt(newContent) : null;
-        msg.setDsContent(encrypted);
+        msg.setDsContent(newContent != null ? encryptionService.encrypt(newContent) : null);
         msg.setStEdited(true);
         msg.setDtEdited(OffsetDateTime.now());
-
         dmMessageRepository.save(msg);
 
-        if (newContent != null && !newContent.isBlank()) {
+        if (newContent != null && !newContent.isBlank())
             dmMessageRepository.updateSearchVector(messageId, newContent);
-        }
 
-        // Use the helper to ensure consistent decryption/fallback for the broadcast
         DmMessage broadcast = cloneWithDecryptedContent(msg, newContent);
-        chatHandler.broadcastToDm(msg.getIdConversation(),
-                Map.of("type", "DM_MESSAGE_EDIT", "data", broadcast));
-
+        chatHandler.broadcastToDm(msg.getIdConversation(), Map.of("type", "DM_MESSAGE_EDIT", "data", broadcast));
         return broadcast;
     }
 
-    @Transactional                    // separate write transaction
+    @Transactional
     public void touchAttachments(List<UUID> messageIds) {
         if (!messageIds.isEmpty())
             msAttachmentRepository.touchByMessageIds(messageIds, ZonedDateTime.now());
@@ -364,12 +305,9 @@ public class DmService {
         assertParticipant(conversationId, userId);
         DmReadState state = dmReadStateRepository
                 .findByIdConversationAndIdUser(conversationId, userId)
-                .orElse(DmReadState.builder()
-                        .idConversation(conversationId)
-                        .idUser(userId)
-                        .build());
+                .orElse(DmReadState.builder().idConversation(conversationId).idUser(userId).build());
         state.setIdLastReadMsg(lastMessageId);
-        state.setDtLastRead(java.time.OffsetDateTime.now());
+        state.setDtLastRead(OffsetDateTime.now());
         dmReadStateRepository.save(state);
     }
 
@@ -378,10 +316,7 @@ public class DmService {
         assertParticipant(conversationId, userId);
         DmReadState state = dmReadStateRepository
                 .findByIdConversationAndIdUser(conversationId, userId)
-                .orElse(DmReadState.builder()
-                        .idConversation(conversationId)
-                        .idUser(userId)
-                        .build());
+                .orElse(DmReadState.builder().idConversation(conversationId).idUser(userId).build());
         state.setStMuted(muted);
         dmReadStateRepository.save(state);
     }
@@ -399,7 +334,6 @@ public class DmService {
         return msg;
     }
 
-
     public List<ConversationSummaryDto> getConversationSummaries(UUID userId) {
         List<Conversation> convos = conversationRepository.findAllByParticipant(userId);
 
@@ -408,7 +342,7 @@ public class DmService {
                 .map(Conversation::getIdConversation)
                 .toList();
 
-        // ── 1 query: all other participant IDs ────────────────────────────────
+        // 1 query: all other participant IDs
         Map<UUID, UUID> convToOther = participantRepository
                 .findOtherParticipantsIn(directConvIds, userId).stream()
                 .collect(java.util.stream.Collectors.toMap(
@@ -419,7 +353,7 @@ public class DmService {
 
         List<UUID> otherIds = convToOther.values().stream().distinct().toList();
 
-        // ── 1 query each: accounts, visuals, friendships ──────────────────────
+        // 1 query each: accounts, visuals, friendships
         Map<UUID, Account> accounts = accountRepository.findAllById(otherIds).stream()
                 .collect(java.util.stream.Collectors.toMap(Account::getIdUser, a -> a));
 
@@ -432,16 +366,16 @@ public class DmService {
                 .map(f -> f.getIdUserA().equals(userId) ? f.getIdUserB() : f.getIdUserA())
                 .collect(java.util.stream.Collectors.toSet());
 
-        // ── 1 query: unread counts ────────────────────────────────────────────
-        Map<UUID, Long> unreadCounts = (directConvIds.isEmpty()
-                ? java.util.List.<Object[]>of()
-                : dmMessageRepository.countUnreadPerConversation(userId, directConvIds)).stream()
+        // 1 query: unread counts — uses typed projection, not Object[]
+        Map<UUID, Long> unreadCounts = directConvIds.isEmpty()
+                ? java.util.Map.of()
+                : dmMessageRepository.countUnreadPerConversation(userId, directConvIds).stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        row -> UUID.fromString(row[0].toString()),
-                        row -> ((Number) row[1]).longValue()
+                        row -> UUID.fromString(row.getConversationId()),
+                        DmMessageRepository.ConversationUnreadCount::getUnreadCount
                 ));
 
-        // ── Assemble ──────────────────────────────────────────────────────────
+        // Assemble
         return convos.stream().map(c -> {
             if (Boolean.TRUE.equals(c.getStGroup())) {
                 return ConversationSummaryDto.builder()
@@ -459,8 +393,8 @@ public class DmService {
                         .build();
             }
 
-            Account other  = accounts.get(otherId);
-            Visuals vis    = visualsMap.get(otherId);
+            Account other = accounts.get(otherId);
+            Visuals vis   = visualsMap.get(otherId);
 
             return ConversationSummaryDto.builder()
                     .idConversation(c.getIdConversation())
@@ -517,7 +451,7 @@ public class DmService {
         try {
             msg.setDsContent(encryptionService.decrypt(msg.getDsContent()));
         } catch (Exception e) {
-            // Message predates encryption — content is already plaintext, leave it as-is
+            // Legacy plaintext row — leave as-is
         }
     }
 
@@ -527,15 +461,11 @@ public class DmService {
 
     public void broadcastAttachmentUpdate(UUID messageId) {
         dmMessageRepository.findById(messageId).ifPresent(msg -> {
-            List<DmAttachment> attachments = dmAttachmentRepository.findByIdMessage(messageId);
-            msg.setAttachments(attachments);
-            // Reuse the existing decrypt path — identical to getMessages/getMessage
+            msg.setAttachments(dmAttachmentRepository.findByIdMessage(messageId));
             decrypt(msg);
             populateForwardedFrom(msg);
-            chatHandler.broadcastToDm(
-                    msg.getIdConversation(),
-                    Map.of("type", "DM_MESSAGE_EDIT", "data", msg)
-            );
+            chatHandler.broadcastToDm(msg.getIdConversation(),
+                    Map.of("type", "DM_MESSAGE_EDIT", "data", msg));
         });
     }
 
@@ -548,21 +478,17 @@ public class DmService {
         if (!conv.getIdOwner().equals(requesterId))
             throw new ForbiddenException("Only the group owner can add members.");
 
-        long current = participantRepository
-                .findByIdConversationAndDtLeftIsNull(conversationId).size();
+        long current = participantRepository.findByIdConversationAndDtLeftIsNull(conversationId).size();
         if (current >= 10)
             throw new AccordException("Groups are limited to 10 members.");
 
-        boolean alreadyIn = participantRepository
-                .findByIdConversationAndDtLeftIsNull(conversationId)
+        boolean alreadyIn = participantRepository.findByIdConversationAndDtLeftIsNull(conversationId)
                 .stream().anyMatch(p -> p.getIdUser().equals(targetId));
         if (alreadyIn)
             throw new AccordException("User is already in this group.");
 
         participantRepository.save(Participant.builder()
-                .idConversation(conversationId)
-                .idUser(targetId)
-                .build());
+                .idConversation(conversationId).idUser(targetId).build());
 
         chatHandler.broadcastToDm(conversationId, Map.of(
                 "type", "GROUP_MEMBER_ADD",
@@ -581,8 +507,7 @@ public class DmService {
         if (requesterId.equals(targetId))
             throw new ForbiddenException("Use the leave endpoint to leave a group.");
 
-        participantRepository.findByIdConversationAndDtLeftIsNull(conversationId)
-                .stream()
+        participantRepository.findByIdConversationAndDtLeftIsNull(conversationId).stream()
                 .filter(p -> p.getIdUser().equals(targetId))
                 .findFirst()
                 .ifPresent(p -> {
@@ -605,8 +530,7 @@ public class DmService {
 
         assertParticipant(conversationId, userId);
 
-        participantRepository.findByIdConversationAndDtLeftIsNull(conversationId)
-                .stream()
+        participantRepository.findByIdConversationAndDtLeftIsNull(conversationId).stream()
                 .filter(p -> p.getIdUser().equals(userId))
                 .findFirst()
                 .ifPresent(p -> {
@@ -614,10 +538,8 @@ public class DmService {
                     participantRepository.save(p);
                 });
 
-        // If owner left, transfer to the next member or leave ownerless
         if (conv.getIdOwner().equals(userId)) {
-            participantRepository.findByIdConversationAndDtLeftIsNull(conversationId)
-                    .stream()
+            participantRepository.findByIdConversationAndDtLeftIsNull(conversationId).stream()
                     .map(Participant::getIdUser)
                     .findFirst()
                     .ifPresent(newOwner -> {

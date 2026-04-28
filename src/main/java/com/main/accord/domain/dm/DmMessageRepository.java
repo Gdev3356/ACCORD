@@ -34,70 +34,76 @@ public interface DmMessageRepository extends JpaRepository<DmMessage, UUID> {
     """)
     List<DmMessage> findBeforeMessage(UUID conversationId, UUID beforeId, Pageable pageable);
 
-        @Query("""
+    @Query("""
         SELECT m FROM DmMessage m
         WHERE m.idConversation = :conversationId
           AND m.stDeleted = false
-          AND LOWER(m.dsContent) LIKE CONCAT('%', :query, '%')
+          AND LOWER(m.dsContent) LIKE CONCAT('%', LOWER(:query), '%')
         ORDER BY m.dtCreated DESC
     """)
     List<DmMessage> searchContent(UUID conversationId, String query, Pageable pageable);
 
-    // For read state service
     @Query("SELECT m FROM DmMessage m WHERE m.idConversation = :convId AND m.stDeleted = false ORDER BY m.dtCreated DESC LIMIT 1")
     Optional<DmMessage> findLatestByConversation(UUID convId);
 
-    // For reply previews
-    Optional<DmMessage> findByIdMessage(UUID messageId); // likely already exists as findById
+    Optional<DmMessage> findByIdMessage(UUID messageId);
 
     @Query("SELECT COUNT(m) FROM DmMessage m WHERE m.idConversation = :convId AND m.stDeleted = false AND m.dtCreated > :since")
     long countUnreadSince(UUID convId, OffsetDateTime since);
 
-    // Write the tsvector after encrypt/save
     @Modifying
     @Transactional
     @Query(value = """
-    UPDATE DM_MESSAGE
-    SET    TS_CONTENT = to_tsvector('english', :plaintext)
-    WHERE  ID_MESSAGE = :id
-      AND  :plaintext IS NOT NULL
-      AND  LENGTH(TRIM(:plaintext)) > 0
-""", nativeQuery = true)
+        UPDATE DM_MESSAGE
+        SET    TS_CONTENT = to_tsvector('english', :plaintext)
+        WHERE  ID_MESSAGE = :id
+          AND  :plaintext IS NOT NULL
+          AND  LENGTH(TRIM(:plaintext)) > 0
+    """, nativeQuery = true)
     void updateSearchVector(@Param("id")        UUID id,
                             @Param("plaintext") String plaintext);
 
-    // Ranked full-text search
     @Query(value = """
-    SELECT
-        ID_MESSAGE, ID_CONVERSATION, ID_AUTHOR, ID_REPLY_TO,
-        DS_CONTENT, ST_EDITED, ST_DELETED, DT_CREATED, DT_EDITED,
-        ID_FORWARDED_FROM,
-        TP_MESSAGE,
-        JS_ACTIVITY
-    FROM  DM_MESSAGE
-    WHERE ID_CONVERSATION = :convId
-      AND ST_DELETED      = FALSE
-      AND TS_CONTENT      @@ plainto_tsquery('english', :query)
-    ORDER BY ts_rank(TS_CONTENT, plainto_tsquery('english', :query)) DESC
-    LIMIT :limit
-""", nativeQuery = true)
+        SELECT
+            ID_MESSAGE, ID_CONVERSATION, ID_AUTHOR, ID_REPLY_TO,
+            DS_CONTENT, ST_EDITED, ST_DELETED, DT_CREATED, DT_EDITED,
+            ID_FORWARDED_FROM, TP_MESSAGE, JS_ACTIVITY
+        FROM  DM_MESSAGE
+        WHERE ID_CONVERSATION = :convId
+          AND ST_DELETED      = FALSE
+          AND TS_CONTENT      @@ plainto_tsquery('english', :query)
+        ORDER BY ts_rank(TS_CONTENT, plainto_tsquery('english', :query)) DESC
+        LIMIT :limit
+    """, nativeQuery = true)
     List<DmMessage> fullTextSearch(@Param("convId") UUID convId,
                                    @Param("query")  String query,
                                    @Param("limit")  int limit);
 
-    @Query(value = """
-    SELECT m.id_conversation, COUNT(m.id_message)
-    FROM dm_message m
-    LEFT JOIN dm_read_state r
-        ON r.id_conversation = m.id_conversation
-        AND r.id_user = :userId
-    WHERE m.id_conversation IN :conversationIds
-      AND m.st_deleted = false
-      AND (r.dt_last_read IS NULL OR m.dt_created > r.dt_last_read)
-    GROUP BY m.id_conversation
-""", nativeQuery = true)
-    List<Object[]> countUnreadPerConversation(
-            @Param("userId") UUID userId,
-            @Param("conversationIds") List<UUID> conversationIds
-    );
+    // ── Typed projection — replaces List<Object[]> ────────────────────────────
+
+    /**
+     * Unread message count per DM conversation.
+     * Previously returned List<Object[]>{ id_conversation, count } which required
+     * unsafe positional casting. Now fully typed.
+     */
+    @Query(nativeQuery = true, value = """
+        SELECT m.id_conversation::text AS conversationId,
+               COUNT(m.id_message)     AS unreadCount
+        FROM dm_message m
+        LEFT JOIN dm_read_state r
+            ON r.id_conversation = m.id_conversation
+           AND r.id_user = :userId
+        WHERE m.id_conversation IN :conversationIds
+          AND m.st_deleted = false
+          AND (r.dt_last_read IS NULL OR m.dt_created > r.dt_last_read)
+        GROUP BY m.id_conversation
+    """)
+    List<ConversationUnreadCount> countUnreadPerConversation(
+            @Param("userId")          UUID userId,
+            @Param("conversationIds") List<UUID> conversationIds);
+
+    interface ConversationUnreadCount {
+        String getConversationId();   // UUID as text
+        Long   getUnreadCount();
+    }
 }

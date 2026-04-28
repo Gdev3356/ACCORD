@@ -16,10 +16,15 @@ public class PermissionService {
     private final MemberRepository             memberRepository;
     private final MemberRoleRepository         memberRoleRepository;
     private final PermissionOverrideRepository overrideRepository;
+    private final ServerRepository             serverRepository; // added — replaces memberRepository.findServer()
 
     public long computeEffective(UUID userId, UUID channelId, UUID serverId) {
         // 1. Server owner — all permissions
-        Server server = memberRepository.findServer(serverId);
+        // Previously called memberRepository.findServer(serverId) which was a
+        // leaky abstraction. Server lookups now go through ServerRepository.
+        Server server = serverRepository.findById(serverId).orElseThrow(
+                () -> new IllegalArgumentException("Server not found: " + serverId)
+        );
         if (server.getIdOwner().equals(userId)) return ~0L;
 
         // 2. Collect role permission masks
@@ -49,7 +54,9 @@ public class PermissionService {
                 base |=  ov.getNrAllow();
             }
 
-            // Re-apply member override correctly (captured lambda limitation workaround)
+            // NOTE: `base` is a primitive long captured by the lambda above — Java
+            // does not allow mutating a primitive in a lambda. Use the explicit
+            // presence-check form instead:
             var memberOv = overrideRepository.findByChannelAndUser(channelId, userId);
             if (memberOv.isPresent()) {
                 PermissionOverride ov = memberOv.get();

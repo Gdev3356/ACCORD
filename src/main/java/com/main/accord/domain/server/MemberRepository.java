@@ -1,5 +1,7 @@
 package com.main.accord.domain.server;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -12,14 +14,26 @@ import java.util.UUID;
 
 public interface MemberRepository extends JpaRepository<Member, Member.MemberId> {
 
+    /**
+     * Paginated member list — replaces the unbounded findByIdServer(UUID).
+     * The old query returned every member with no cap, which would OOM on
+     * large servers. Use Page<Member> at the call site and pass
+     * PageRequest.of(page, size, Sort.by("dtJoined").descending()).
+     */
+    Page<Member> findByIdServer(UUID serverId, Pageable pageable);
+
+    /**
+     * Kept as an internal utility for small, controlled use-cases
+     * (e.g. permission checks, broadcasting). Do NOT expose this via a
+     * controller endpoint without pagination.
+     */
     List<Member> findByIdServer(UUID serverId);
 
     Optional<Member> findByIdServerAndIdUser(UUID serverId, UUID userId);
 
     boolean existsByIdServerAndIdUser(UUID serverId, UUID userId);
 
-    @Query("SELECT s FROM Server s WHERE s.idServer = :serverId")
-    Server findServer(UUID serverId);
+    // Removed: findServer(UUID serverId) — Server lookups belong in ServerRepository.
 
     @Query("""
         SELECT COALESCE(MAX(r.nrPosition), -1) FROM Role r
@@ -40,7 +54,6 @@ public interface MemberRepository extends JpaRepository<Member, Member.MemberId>
             "WHERE m.stTimeout = true AND m.dtTimeoutExpires < :now")
     int expireTimeouts(OffsetDateTime now);
 
-
     @Query("SELECT m FROM Member m WHERE m.stTimeout = true AND m.dtTimeoutExpires < :now")
     List<Member> findExpiredTimeouts(OffsetDateTime now);
 
@@ -53,11 +66,11 @@ public interface MemberRepository extends JpaRepository<Member, Member.MemberId>
     List<UUID> findCommonServers(@Param("userA") UUID userA, @Param("userB") UUID userB);
 
     @Query("""
-    SELECT DISTINCT
-        CASE WHEN f.idUserA = :userId THEN f.idUserB ELSE f.idUserA END
-    FROM Friendship f
-    WHERE (f.idUserA = :userId OR f.idUserB = :userId)
-      AND f.stStatus = com.main.accord.domain.dm.FriendStatus.accepted
-""")
+        SELECT DISTINCT
+            CASE WHEN f.idUserA = :userId THEN f.idUserB ELSE f.idUserA END
+        FROM Friendship f
+        WHERE (f.idUserA = :userId OR f.idUserB = :userId)
+          AND f.stStatus = com.main.accord.domain.dm.FriendStatus.accepted
+    """)
     List<UUID> findFriendIds(@Param("userId") UUID userId);
 }

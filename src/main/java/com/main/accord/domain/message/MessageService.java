@@ -20,7 +20,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,18 +28,18 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MessageService {
 
-    private final MessageRepository     messageRepository;
-    private final ChannelRepository     channelRepository;
-    private final EditHistoryRepository editHistoryRepository;
-    private final PermissionService     permissionService;
-    private final ChatHandler           chatHandler;
-    private final EncryptionService encryptionService;
-    private final MentionParser         mentionParser;
-    private final NotificationService   notificationService;
-    private final BanService            banService;
+    private final MessageRepository      messageRepository;
+    private final ChannelRepository      channelRepository;
+    private final EditHistoryRepository  editHistoryRepository;
+    private final PermissionService      permissionService;
+    private final ChatHandler            chatHandler;
+    private final EncryptionService      encryptionService;
+    private final MentionParser          mentionParser;
+    private final NotificationService    notificationService;
+    private final BanService             banService;
     private final MsAttachmentRepository msAttachmentRepository;
-    private final ChReadStateRepository chReadStateRepository;
-    private final MemberRepository memberRepository;
+    private final ChReadStateRepository  chReadStateRepository;
+    private final MemberRepository       memberRepository;
 
     @Transactional
     public Message sendMessage(UUID channelId, UUID authorId, String content,
@@ -52,9 +51,8 @@ public class MessageService {
         Channel channel = channelRepository.findById(channelId)
                 .orElseThrow(() -> new NotFoundException("Channel not found."));
 
-        if (isUserTimedOut(authorId, channel.getIdServer())) {
+        if (isUserTimedOut(authorId, channel.getIdServer()))
             throw new ForbiddenException("You are currently timed out and cannot send messages.");
-        }
 
         if (banService.isServerBanned(authorId, channel.getIdServer()))
             throw new ForbiddenException("You are banned from this server.");
@@ -107,18 +105,14 @@ public class MessageService {
                 ? messageRepository.findBeforeMessage(channelId, beforeId, page)
                 : messageRepository.findByChannel(channelId, page);
 
-        // Decrypt into NEW objects — never mutate managed entities
-        List<Message> result = messages.stream().map(m -> {
+        return messages.stream().map(m -> {
             if (m.getDsContent() == null) return m;
             try {
-                Message copy = cloneWithDecryptedContent(m, encryptionService.decrypt(m.getDsContent()));
-                return copy;
+                return cloneWithDecryptedContent(m, encryptionService.decrypt(m.getDsContent()));
             } catch (Exception e) {
                 return m; // legacy plaintext
             }
         }).toList();
-
-        return result;
     }
 
     @Transactional
@@ -128,9 +122,8 @@ public class MessageService {
 
         if (!msg.getIdAuthor().equals(editorId)) {
             Channel channel = channelRepository.findById(msg.getIdChannel()).orElseThrow();
-            if (!permissionService.can(editorId, msg.getIdChannel(), channel.getIdServer(), Permissions.MANAGE_MESSAGES)) {
+            if (!permissionService.can(editorId, msg.getIdChannel(), channel.getIdServer(), Permissions.MANAGE_MESSAGES))
                 throw new ForbiddenException("You can't edit this message.");
-            }
         }
 
         editHistoryRepository.save(
@@ -153,27 +146,31 @@ public class MessageService {
     public void markRead(UUID channelId, UUID userId, UUID lastMessageId) {
         Channel channel = channelRepository.findById(channelId)
                 .orElseThrow(() -> new NotFoundException("Channel not found."));
+
         if (!permissionService.can(userId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
             throw new ForbiddenException("You don't have access to this channel.");
 
-        if (lastMessageId != null && !messageRepository.existsById(lastMessageId)) {
-            // Message not yet committed, skip or retry
-            return;
-        }
+        if (lastMessageId != null && !messageRepository.existsById(lastMessageId))
+            return; // not yet committed, skip
+
         ChReadState state = chReadStateRepository
                 .findByIdChannelAndIdUser(channelId, userId)
                 .orElse(ChReadState.builder().idChannel(channelId).idUser(userId).build());
         state.setIdLastReadMsg(lastMessageId);
-        state.setDtLastRead(java.time.OffsetDateTime.now());
+        state.setDtLastRead(OffsetDateTime.now());
         chReadStateRepository.save(state);
     }
 
-    public java.util.Map<UUID, Long> getUnreadCounts(UUID serverId, UUID userId) {
+    /**
+     * Uses the typed ChReadStateRepository.ChannelUnreadCount projection.
+     * Previously cast Object[] by position — now fully type-safe.
+     */
+    public Map<UUID, Long> getUnreadCounts(UUID serverId, UUID userId) {
         return chReadStateRepository.countUnreadPerChannelInServer(serverId, userId)
                 .stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        row -> UUID.fromString(row[0].toString()),
-                        row -> ((Number) row[1]).longValue()
+                        row -> UUID.fromString(row.getChannelId()),
+                        ChReadStateRepository.ChannelUnreadCount::getUnreadCount
                 ));
     }
 
@@ -181,28 +178,12 @@ public class MessageService {
     public void broadcastTyping(UUID channelId, UUID userId) {
         Channel channel = channelRepository.findById(channelId)
                 .orElseThrow(() -> new NotFoundException("Channel not found."));
+
         if (!permissionService.can(userId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
             throw new ForbiddenException("No access.");
 
         chatHandler.broadcastEventToChannel(channelId,
                 new ChatHandler.ChatEvent("CHANNEL_TYPING", Map.of("userId", userId.toString())));
-    }
-
-    private boolean isUserTimedOut(UUID userId, UUID serverId) {
-        Member member = memberRepository.findByIdServerAndIdUser(serverId, userId).orElse(null);
-        if (member == null || !Boolean.TRUE.equals(member.getStTimeout())) {
-            return false;
-        }
-
-        OffsetDateTime expires = member.getDtTimeoutExpires();
-        if (expires != null && expires.isBefore(OffsetDateTime.now())) {
-            // Auto-cleanup expired timeout (in case scheduled task hasn't run yet)
-            member.setStTimeout(false);
-            member.setDtTimeoutExpires(null);
-            memberRepository.save(member);
-            return false;
-        }
-        return true;
     }
 
     public List<Message> searchMessages(UUID channelId, UUID requesterId, String query, int limit) {
@@ -212,20 +193,17 @@ public class MessageService {
         if (!permissionService.can(requesterId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
             throw new ForbiddenException("You don't have access to this channel.");
 
-        if (query == null || query.trim().isEmpty()) {
+        if (query == null || query.trim().isEmpty())
             return List.of();
-        }
 
         List<Message> msgs = messageRepository.fullTextSearch(channelId, query, Math.min(limit, 100));
 
-        // Decrypt each result — same pattern as getMessages()
         return msgs.stream().map(m -> {
             if (m.getDsContent() == null) return m;
             try {
-                Message copy = cloneWithDecryptedContent(m, encryptionService.decrypt(m.getDsContent()));
-                return copy;
+                return cloneWithDecryptedContent(m, encryptionService.decrypt(m.getDsContent()));
             } catch (Exception e) {
-                return m; // legacy plaintext
+                return m;
             }
         }).toList();
     }
@@ -237,24 +215,18 @@ public class MessageService {
 
         Channel channel = channelRepository.findById(msg.getIdChannel()).orElseThrow();
 
-        // Null-safe: webhook messages (idAuthor == null) are never "owned" by a user
         boolean isAuthor  = msg.getIdAuthor() != null && msg.getIdAuthor().equals(requesterId);
         boolean canManage = permissionService.can(
                 requesterId, msg.getIdChannel(), channel.getIdServer(), Permissions.MANAGE_MESSAGES
         );
 
         if (!isAuthor && !canManage) {
-            // Webhook messages (no author) can be deleted by anyone with higher role or canManage;
-            // since canManage is false here, require strict role hierarchy
             if (msg.getIdAuthor() != null
                     && !hasHigherRolePriority(requesterId, msg.getIdAuthor(), channel.getIdServer())) {
                 throw new ForbiddenException("You cannot delete messages from users with an equal or higher role.");
             }
-            // Webhook messages (idAuthor == null) fall through and are deletable by canManage
-            // — but since canManage is false here, block non-managers from deleting webhook messages too
-            if (msg.getIdAuthor() == null) {
+            if (msg.getIdAuthor() == null)
                 throw new ForbiddenException("You need Manage Messages permission to delete webhook messages.");
-            }
         }
 
         msg.setStDeleted(true);
@@ -263,17 +235,47 @@ public class MessageService {
         chatHandler.broadcastDeleteToChannel(msg.getIdChannel(), messageId);
     }
 
-    // Add this helper method
+    @Transactional(readOnly = true)
+    public Message getMessage(UUID channelId, UUID messageId, UUID requesterId) {
+        Channel channel = channelRepository.findById(channelId)
+                .orElseThrow(() -> new NotFoundException("Channel not found."));
+
+        if (!permissionService.can(requesterId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
+            throw new ForbiddenException("You don't have access to this channel.");
+
+        Message msg = messageRepository.findById(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found."));
+
+        if (msg.getDsContent() == null) return msg;
+        try {
+            return cloneWithDecryptedContent(msg, encryptionService.decrypt(msg.getDsContent()));
+        } catch (Exception e) {
+            return msg;
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private boolean isUserTimedOut(UUID userId, UUID serverId) {
+        Member member = memberRepository.findByIdServerAndIdUser(serverId, userId).orElse(null);
+        if (member == null || !Boolean.TRUE.equals(member.getStTimeout())) return false;
+
+        OffsetDateTime expires = member.getDtTimeoutExpires();
+        if (expires != null && expires.isBefore(OffsetDateTime.now())) {
+            member.setStTimeout(false);
+            member.setDtTimeoutExpires(null);
+            memberRepository.save(member);
+            return false;
+        }
+        return true;
+    }
+
     private boolean hasHigherRolePriority(UUID requesterId, UUID targetId, UUID serverId) {
         short requesterTop = memberRepository.getHighestRolePosition(requesterId, serverId);
-        short targetTop = memberRepository.getHighestRolePosition(targetId, serverId);
-
-        // Requester needs STRICTLY HIGHER priority (LOWER number)
+        short targetTop    = memberRepository.getHighestRolePosition(targetId, serverId);
         return requesterTop < targetTop;
     }
 
-    // Returns a transient copy with plain text content for broadcasting —
-    // we never send encrypted content over the wire to clients
     private Message cloneWithDecryptedContent(Message source, String plainContent) {
         Message copy = new Message();
         copy.setIdMessage(source.getIdMessage());
@@ -290,23 +292,5 @@ public class MessageService {
         copy.setJsActivity(source.getJsActivity());
         copy.setAttachments(source.getAttachments());
         return copy;
-    }
-
-    @Transactional(readOnly = true)
-    public Message getMessage(UUID channelId, UUID messageId, UUID requesterId) {
-        Channel channel = channelRepository.findById(channelId)
-                .orElseThrow(() -> new NotFoundException("Channel not found."));
-        if (!permissionService.can(requesterId, channelId, channel.getIdServer(), Permissions.VIEW_CHANNELS))
-            throw new ForbiddenException("You don't have access to this channel.");
-
-        Message msg = messageRepository.findById(messageId)
-                .orElseThrow(() -> new NotFoundException("Message not found."));
-
-        if (msg.getDsContent() == null) return msg;
-        try {
-            return cloneWithDecryptedContent(msg, encryptionService.decrypt(msg.getDsContent()));
-        } catch (Exception e) {
-            return msg; // legacy plaintext
-        }
     }
 }

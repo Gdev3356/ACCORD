@@ -2,6 +2,7 @@ package com.main.accord.domain.message;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.OffsetDateTime;
@@ -41,9 +42,21 @@ public class Message {
     @Column(name = "DT_EDITED")
     private OffsetDateTime dtEdited;
 
-    @OneToMany(fetch = FetchType.EAGER)
+    /**
+     * LAZY + @BatchSize replaces the old FetchType.EAGER.
+     *
+     * EAGER was firing one extra SELECT per message in every paginated load —
+     * 50 messages = 50 attachment queries. With LAZY + BatchSize(50), Hibernate
+     * fetches attachments for up to 50 messages in a single IN-clause query
+     * only when the collection is actually accessed (i.e. during serialisation).
+     *
+     * If you have a code path that truly needs attachments eagerly, use a
+     * JOIN FETCH in that specific repository query instead of pulling EAGER here.
+     */
+    @OneToMany(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_MESSAGE", referencedColumnName = "ID_MESSAGE",
             insertable = false, updatable = false)
+    @BatchSize(size = 50)
     private List<MsAttachment> attachments = new java.util.ArrayList<>();
 
     @Builder.Default
